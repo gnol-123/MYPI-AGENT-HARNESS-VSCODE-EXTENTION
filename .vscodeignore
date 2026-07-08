@@ -15,3 +15,4 @@ scripts/copy-skills.js
 README.md
 package-lock.json
 webview/package-lock.json
+.lavish/
