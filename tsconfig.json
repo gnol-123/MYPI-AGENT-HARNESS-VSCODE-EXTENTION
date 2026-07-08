@@ -14,5 +14,5 @@
     "declaration": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "out", "webview"]
+  "exclude": ["node_modules", "out", "webview", "src/__tests__", "**/*.test.ts"]
 }
