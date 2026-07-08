@@ -1,6 +1,5 @@
 .vscode/**
 .git/**
-node_modules/**
 src/**
 tsconfig.json
 webview/src/**

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { ChatViewProvider } from './chat/panel';
 import { AgentLoop } from './agent/loop';
-import { getConfig, getApiKey, setApiKey } from './config';
+import { getConfig, getApiKey, setApiKey, PROVIDER_PRESETS } from './config';
 import { ToolRegistry } from './tools/registry';
 import { readTool } from './tools/read';
 import { writeTool } from './tools/write';
@@ -21,36 +21,43 @@ let chatProvider: ChatViewProvider;
 let currentAgentLoop: AgentLoop | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  toolRegistry = new ToolRegistry();
-  toolRegistry.register(readTool);
-  toolRegistry.register(writeTool);
-  toolRegistry.register(editTool);
-  toolRegistry.register(bashTool);
-  toolRegistry.register(webFetchTool);
-  toolRegistry.register(context7Tool);
+  try {
+    toolRegistry = new ToolRegistry();
+    toolRegistry.register(readTool);
+    toolRegistry.register(writeTool);
+    toolRegistry.register(editTool);
+    toolRegistry.register(bashTool);
+    toolRegistry.register(webFetchTool);
+    toolRegistry.register(context7Tool);
 
-  const config = getConfig();
-  skillsPath = config.skillsPath || path.join(context.extensionPath, 'skills');
+    const config = getConfig();
+    skillsPath = config.skillsPath || path.join(context.extensionPath, 'skills');
 
-  chatProvider = new ChatViewProvider(context.extensionUri);
+    chatProvider = new ChatViewProvider(context.extensionUri);
 
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider('mypi-by-sl.chatView', chatProvider),
-    vscode.commands.registerCommand('mypi-by-sl.openChat', () => openChat(context)),
-    vscode.commands.registerCommand('mypi-by-sl.setApiKey', () => promptSetApiKey(context)),
-    vscode.commands.registerCommand('mypi-by-sl.explainFile', (uri?: vscode.Uri) =>
-      contextAction(context, 'explainFile', uri),
-    ),
-    vscode.commands.registerCommand('mypi-by-sl.explainSelection', () =>
-      contextAction(context, 'explainSelection'),
-    ),
-    vscode.commands.registerCommand('mypi-by-sl.fixSelection', () =>
-      contextAction(context, 'fixSelection'),
-    ),
-    vscode.commands.registerCommand('mypi-by-sl.refactorSelection', () =>
-      contextAction(context, 'refactorSelection'),
-    ),
-  );
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider('mypi-by-sl.chatView', chatProvider),
+      vscode.commands.registerCommand('mypi-by-sl.openChat', () => openChat(context)),
+      vscode.commands.registerCommand('mypi-by-sl.setApiKey', () => promptSetApiKey(context)),
+      vscode.commands.registerCommand('mypi-by-sl.explainFile', (uri?: vscode.Uri) =>
+        contextAction(context, 'explainFile', uri),
+      ),
+      vscode.commands.registerCommand('mypi-by-sl.explainSelection', () =>
+        contextAction(context, 'explainSelection'),
+      ),
+      vscode.commands.registerCommand('mypi-by-sl.fixSelection', () =>
+        contextAction(context, 'fixSelection'),
+      ),
+      vscode.commands.registerCommand('mypi-by-sl.refactorSelection', () =>
+        contextAction(context, 'refactorSelection'),
+      ),
+    );
+
+    vscode.window.showInformationMessage('MYPI-by-SL activated! Click the cat icon or run "MYPI-by-SL: Open Chat".');
+  } catch (err) {
+    vscode.window.showErrorMessage(`MYPI-by-SL failed to activate: ${err}`);
+    console.error('MYPI-by-SL activation error:', err);
+  }
 }
 
 async function ensureAgentLoop(context: vscode.ExtensionContext): Promise<AgentLoop | undefined> {
@@ -117,7 +124,8 @@ async function contextAction(
 
 async function promptSetApiKey(context: vscode.ExtensionContext): Promise<void> {
   const config = getConfig();
-  const label = config.provider === 'anthropic' ? 'Anthropic API Key' : 'OpenAI API Key';
+  const preset = PROVIDER_PRESETS[config.provider];
+  const label = `${preset.name} API Key`;
 
   const key = await vscode.window.showInputBox({
     prompt: `Enter your ${label}`,
@@ -150,16 +158,18 @@ async function createAgentLoop(context: vscode.ExtensionContext): Promise<AgentL
   }
 
   let provider: LLMProvider;
-  if (config.provider === 'openai-compatible') {
-    provider = createOpenAICompatProvider({
-      apiKey,
-      model: config.model,
-      baseUrl: config.apiEndpoint || 'https://api.openai.com/v1',
-    });
-  } else {
+  const preset = PROVIDER_PRESETS[config.provider];
+
+  if (config.provider === 'anthropic') {
     provider = createAnthropicProvider({
       apiKey,
-      model: config.model,
+      model: config.model || preset.defaultModel,
+    });
+  } else {
+    provider = createOpenAICompatProvider({
+      apiKey,
+      model: config.model || preset.defaultModel,
+      baseUrl: config.apiEndpoint || preset.defaultEndpoint,
     });
   }
 

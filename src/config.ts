@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { SLSConfig, buildConfig } from './config-types';
+import { SLSConfig, buildConfig, PROVIDER_PRESETS } from './config-types';
+import type { Provider } from './config-types';
 
 function getVsCodeSettings(): Record<string, unknown> {
   const config = vscode.workspace.getConfiguration('mypi-by-sl');
@@ -25,4 +26,5 @@ export async function setApiKey(secrets: vscode.SecretStorage, key: string): Pro
   await secrets.store('mypi-by-sl.apiKey', key);
 }
 
-export { SLSConfig, buildConfig };
+export { SLSConfig, buildConfig, PROVIDER_PRESETS };
+export type { Provider };

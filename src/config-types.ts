@@ -1,11 +1,53 @@
+export type Provider = 'anthropic' | 'openai' | 'deepseek' | 'z-ai' | 'together';
+
 export interface SLSConfig {
-  provider: 'anthropic' | 'openai-compatible';
+  provider: Provider;
   model: string;
   apiEndpoint: string;
   maxTokens: number;
   toolTimeout: number;
   skillsPath: string;
 }
+
+export interface ProviderPreset {
+  name: string;
+  defaultModel: string;
+  defaultEndpoint: string;
+  needsApiKey: boolean;
+}
+
+export const PROVIDER_PRESETS: Record<Provider, ProviderPreset> = {
+  anthropic: {
+    name: 'Anthropic (Claude)',
+    defaultModel: 'claude-sonnet-4-20250514',
+    defaultEndpoint: '',
+    needsApiKey: true,
+  },
+  openai: {
+    name: 'OpenAI',
+    defaultModel: 'gpt-4o',
+    defaultEndpoint: 'https://api.openai.com/v1',
+    needsApiKey: true,
+  },
+  deepseek: {
+    name: 'DeepSeek',
+    defaultModel: 'deepseek-chat',
+    defaultEndpoint: 'https://api.deepseek.com/v1',
+    needsApiKey: true,
+  },
+  'z-ai': {
+    name: 'Z.AI',
+    defaultModel: 'glm-4-flash',
+    defaultEndpoint: 'https://api.z.ai/v1',
+    needsApiKey: true,
+  },
+  together: {
+    name: 'Together AI',
+    defaultModel: 'meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8',
+    defaultEndpoint: 'https://api.together.xyz/v1',
+    needsApiKey: true,
+  },
+};
 
 const DEFAULT_CONFIG: SLSConfig = {
   provider: 'anthropic',

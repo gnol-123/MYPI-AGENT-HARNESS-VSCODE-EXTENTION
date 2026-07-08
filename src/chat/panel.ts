@@ -65,6 +65,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   private async handleMessage(message: Record<string, unknown>): Promise<void> {
     switch (message.type) {
+      case 'runCommand': {
+        const cmd = message.command as string;
+        vscode.commands.executeCommand(cmd);
+        break;
+      }
       case 'userMessage': {
         const text = message.text as string;
         if (!this.agentLoop) {

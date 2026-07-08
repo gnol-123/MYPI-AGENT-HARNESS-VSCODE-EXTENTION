@@ -29,6 +29,36 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
   },
+  setupBanner: {
+    margin: '12px',
+    padding: '16px',
+    borderRadius: '8px',
+    background: 'var(--vscode-textBlockQuote-background)',
+    border: '1px solid var(--vscode-textBlockQuote-border)',
+    textAlign: 'center' as const,
+  },
+  setupTitle: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: 'var(--vscode-foreground)',
+    marginBottom: '6px',
+  },
+  setupText: {
+    fontSize: '12px',
+    color: 'var(--vscode-descriptionForeground)',
+    marginBottom: '12px',
+    lineHeight: '1.5',
+  },
+  setupButton: {
+    background: 'var(--vscode-button-background)',
+    color: 'var(--vscode-button-foreground)',
+    border: 'none',
+    borderRadius: '4px',
+    padding: '6px 16px',
+    fontSize: '12px',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
 };
 
 export const App: React.FC = () => {
@@ -36,6 +66,7 @@ export const App: React.FC = () => {
   const [streamingText, setStreamingText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentToolCalls, setCurrentToolCalls] = useState<Map<string, { name: string; params: Record<string, unknown> }>>(new Map());
+  const [needsApiKey, setNeedsApiKey] = useState(false);
 
   const sendMessage = useCallback((text: string) => {
     const userMsg: Message = {
@@ -50,6 +81,10 @@ export const App: React.FC = () => {
     setCurrentToolCalls(new Map());
 
     vscodeApi.postMessage({ type: 'userMessage', text });
+  }, []);
+
+  const openCommandPalette = useCallback(() => {
+    vscodeApi.postMessage({ type: 'runCommand', command: 'mypi-by-sl.setApiKey' });
   }, []);
 
   useEffect(() => {
@@ -94,7 +129,10 @@ export const App: React.FC = () => {
         }
 
         case 'error':
-          setStreamingText((prev) => prev + `\n\nError: ${msg.message}`);
+          if (msg.message.includes('API key') || msg.message.includes('Set API Key')) {
+            setNeedsApiKey(true);
+          }
+          setStreamingText((prev) => prev + `\n\n${msg.message}`);
           setIsLoading(false);
           break;
 
@@ -117,6 +155,17 @@ export const App: React.FC = () => {
     <div style={styles.container}>
       <div style={styles.header}>MYPI-by-SL</div>
       <div style={styles.main}>
+        {needsApiKey && messages.length === 0 && !streamingText && (
+          <div style={styles.setupBanner}>
+            <div style={styles.setupTitle}>Welcome to MYPI-by-SL</div>
+            <div style={styles.setupText}>
+              Set your Anthropic API key to start using the AI coding agent.
+            </div>
+            <button style={styles.setupButton} onClick={openCommandPalette}>
+              Set API Key
+            </button>
+          </div>
+        )}
         <ChatView
           messages={messages}
           streamingText={streamingText}

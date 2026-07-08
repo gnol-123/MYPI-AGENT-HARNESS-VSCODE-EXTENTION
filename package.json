@@ -7,15 +7,7 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "activationEvents": [
-    "onView:mypi-by-sl.chatView",
-    "onCommand:mypi-by-sl.openChat",
-    "onCommand:mypi-by-sl.setApiKey",
-    "onCommand:mypi-by-sl.explainFile",
-    "onCommand:mypi-by-sl.explainSelection",
-    "onCommand:mypi-by-sl.fixSelection",
-    "onCommand:mypi-by-sl.refactorSelection"
-  ],
+  "activationEvents": ["*"],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -57,16 +49,23 @@
       "properties": {
         "mypi-by-sl.provider": {
           "type": "string", "default": "anthropic",
-          "enum": ["anthropic", "openai-compatible"],
-          "description": "LLM provider"
+          "enum": ["anthropic", "openai", "deepseek", "z-ai", "together"],
+          "description": "LLM provider",
+          "enumDescriptions": {
+            "anthropic": "Anthropic (Claude) - claude-sonnet-4-20250514",
+            "openai": "OpenAI - gpt-4o",
+            "deepseek": "DeepSeek - deepseek-chat",
+            "z-ai": "Z.AI - glm-4-flash",
+            "together": "Together AI - Llama 4 Maverick"
+          }
         },
         "mypi-by-sl.model": {
           "type": "string", "default": "claude-sonnet-4-20250514",
-          "description": "Model ID to use"
+          "description": "Model ID (leave empty for provider default)"
         },
         "mypi-by-sl.apiEndpoint": {
           "type": "string", "default": "",
-          "description": "Base URL for openai-compatible provider"
+          "description": "Override API base URL (leave empty for provider default)"
         },
         "mypi-by-sl.maxTokens": {
           "type": "number", "default": 8192,
