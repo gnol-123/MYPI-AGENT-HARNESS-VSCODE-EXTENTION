@@ -1,0 +1,142 @@
+{
+  "name": "sls-pi",
+  "displayName": "SL's PI",
+  "description": "Full AI coding agent inside VS Code",
+  "version": "0.1.0",
+  "publisher": "sl",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "sls-pi.openChat",
+        "title": "SL's PI: Open Chat"
+      },
+      {
+        "command": "sls-pi.setApiKey",
+        "title": "SL's PI: Set API Key"
+      },
+      {
+        "command": "sls-pi.explainFile",
+        "title": "SL's PI: Explain this file"
+      },
+      {
+        "command": "sls-pi.explainSelection",
+        "title": "SL's PI: Explain selection"
+      },
+      {
+        "command": "sls-pi.fixSelection",
+        "title": "SL's PI: Fix selection"
+      },
+      {
+        "command": "sls-pi.refactorSelection",
+        "title": "SL's PI: Refactor selection"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sls-pi-sidebar",
+          "title": "SL's PI",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "views": {
+      "sls-pi-sidebar": [
+        {
+          "type": "webview",
+          "id": "sls-pi.chatView",
+          "name": "Chat"
+        }
+      ]
+    },
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "sls-pi.explainFile",
+          "group": "sls-pi",
+          "when": "resource"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "sls-pi.explainSelection",
+          "group": "sls-pi",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "sls-pi.fixSelection",
+          "group": "sls-pi",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "sls-pi.refactorSelection",
+          "group": "sls-pi",
+          "when": "editorHasSelection"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "SL's PI",
+      "properties": {
+        "sls-pi.provider": {
+          "type": "string",
+          "default": "anthropic",
+          "enum": [
+            "anthropic",
+            "openai-compatible"
+          ],
+          "description": "LLM provider"
+        },
+        "sls-pi.model": {
+          "type": "string",
+          "default": "claude-sonnet-4-20250514",
+          "description": "Model ID to use"
+        },
+        "sls-pi.apiEndpoint": {
+          "type": "string",
+          "default": "",
+          "description": "Base URL for openai-compatible provider"
+        },
+        "sls-pi.maxTokens": {
+          "type": "number",
+          "default": 8192,
+          "description": "Maximum tokens per response"
+        },
+        "sls-pi.toolTimeout": {
+          "type": "number",
+          "default": 120,
+          "description": "Maximum seconds for bash commands"
+        },
+        "sls-pi.skillsPath": {
+          "type": "string",
+          "default": "",
+          "description": "Override skill directory (empty = use bundled)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile && npm run build-webview",
+    "compile": "tsc -p ./tsconfig.json",
+    "watch": "tsc -watch -p ./tsconfig.json",
+    "build-webview": "node esbuild.js",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "esbuild": "^0.19.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.20.0"
+  },
+  "allowScripts": {
+    "esbuild@0.19.12": true
+  }
+}
