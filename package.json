@@ -50,14 +50,7 @@
         "mypi-by-sl.provider": {
           "type": "string", "default": "anthropic",
           "enum": ["anthropic", "openai", "deepseek", "z-ai", "together"],
-          "description": "LLM provider",
-          "enumDescriptions": {
-            "anthropic": "Anthropic (Claude) - claude-sonnet-4-20250514",
-            "openai": "OpenAI - gpt-4o",
-            "deepseek": "DeepSeek - deepseek-chat",
-            "z-ai": "Z.AI - glm-4-flash",
-            "together": "Together AI - Llama 4 Maverick"
-          }
+          "description": "LLM provider (Anthropic, OpenAI, DeepSeek, Z.AI, or Together AI)"
         },
         "mypi-by-sl.model": {
           "type": "string", "default": "claude-sonnet-4-20250514",

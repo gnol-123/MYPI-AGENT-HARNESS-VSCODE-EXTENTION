@@ -14,14 +14,28 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100%',
   },
   header: {
-    padding: '8px 12px',
+    padding: '6px 10px',
     borderBottom: '1px solid var(--vscode-sideBarSectionHeader-border)',
     fontSize: '13px',
     fontWeight: 600,
     display: 'flex',
     alignItems: 'center',
-    gap: '6px',
+    justifyContent: 'space-between',
     color: 'var(--vscode-sideBarTitle-foreground)',
+  },
+  headerActions: {
+    display: 'flex',
+    gap: '4px',
+  },
+  headerBtn: {
+    background: 'transparent',
+    border: 'none',
+    color: 'var(--vscode-foreground)',
+    cursor: 'pointer',
+    padding: '2px 6px',
+    borderRadius: '3px',
+    fontSize: '12px',
+    opacity: 0.7,
   },
   main: {
     flex: 1,
@@ -67,6 +81,16 @@ export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentToolCalls, setCurrentToolCalls] = useState<Map<string, { name: string; params: Record<string, unknown> }>>(new Map());
   const [needsApiKey, setNeedsApiKey] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(true);
+
+  const newChat = useCallback(() => {
+    setMessages([]);
+    setStreamingText('');
+    setCurrentToolCalls(new Map());
+    setNeedsApiKey(false);
+    setShowWelcome(true);
+    vscodeApi.postMessage({ type: 'newChat' });
+  }, []);
 
   const sendMessage = useCallback((text: string) => {
     const userMsg: Message = {
@@ -153,7 +177,12 @@ export const App: React.FC = () => {
 
   return (
     <div style={styles.container}>
-      <div style={styles.header}>MYPI-by-SL</div>
+      <div style={styles.header}>
+        <span>MYPI-by-SL</span>
+        <div style={styles.headerActions}>
+          <button style={styles.headerBtn} onClick={newChat} title="New chat">+</button>
+        </div>
+      </div>
       <div style={styles.main}>
         {needsApiKey && messages.length === 0 && !streamingText && (
           <div style={styles.setupBanner}>
