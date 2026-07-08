@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ChatView } from './ChatView';
 import { InputBox } from './InputBox';
-import { Message, HostToWebview } from './types';
+import { Message, HostToWebview, SessionInfo } from './types';
 
 const vscodeApi = acquireVsCodeApi();
 
@@ -34,7 +34,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     padding: '2px 6px',
     borderRadius: '3px',
-    fontSize: '12px',
+    fontSize: '14px',
     opacity: 0.7,
   },
   main: {
@@ -73,6 +73,56 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     cursor: 'pointer',
   },
+  tabsBar: {
+    display: 'flex',
+    gap: '2px',
+    overflowX: 'auto' as const,
+    padding: '4px 4px 0',
+    borderBottom: '1px solid var(--vscode-sideBarSectionHeader-border)',
+    scrollbarWidth: 'none' as any,
+  },
+  tab: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '3px 8px',
+    borderRadius: '4px 4px 0 0',
+    fontSize: '11px',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap' as const,
+    maxWidth: '120px',
+    overflow: 'hidden' as const,
+    textOverflow: 'ellipsis' as const,
+    background: 'transparent',
+    border: '1px solid transparent',
+    borderBottom: 'none',
+    color: 'var(--vscode-descriptionForeground)',
+    position: 'relative' as const,
+  },
+  tabActive: {
+    background: 'var(--vscode-tab-activeBackground)',
+    color: 'var(--vscode-tab-activeForeground)',
+    borderColor: 'var(--vscode-panel-border)',
+  },
+  tabClose: {
+    opacity: 0,
+    fontSize: '10px',
+    lineHeight: '1',
+    cursor: 'pointer',
+    padding: '0 3px',
+    borderRadius: '3px',
+  },
+  newTabBtn: {
+    background: 'transparent',
+    border: 'none',
+    color: 'var(--vscode-descriptionForeground)',
+    cursor: 'pointer',
+    padding: '3px 6px',
+    fontSize: '14px',
+    fontWeight: 600,
+    borderRadius: '3px',
+    lineHeight: 1,
+  },
 };
 
 export const App: React.FC = () => {
@@ -81,16 +131,8 @@ export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentToolCalls, setCurrentToolCalls] = useState<Map<string, { name: string; params: Record<string, unknown> }>>(new Map());
   const [needsApiKey, setNeedsApiKey] = useState(false);
-  const [showWelcome, setShowWelcome] = useState(true);
-
-  const newChat = useCallback(() => {
-    setMessages([]);
-    setStreamingText('');
-    setCurrentToolCalls(new Map());
-    setNeedsApiKey(false);
-    setShowWelcome(true);
-    vscodeApi.postMessage({ type: 'newChat' });
-  }, []);
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState('');
 
   const sendMessage = useCallback((text: string) => {
     const userMsg: Message = {
@@ -103,12 +145,26 @@ export const App: React.FC = () => {
     setStreamingText('');
     setIsLoading(true);
     setCurrentToolCalls(new Map());
+    setNeedsApiKey(false);
 
     vscodeApi.postMessage({ type: 'userMessage', text });
   }, []);
 
   const openCommandPalette = useCallback(() => {
     vscodeApi.postMessage({ type: 'runCommand', command: 'mypi-by-sl.setApiKey' });
+  }, []);
+
+  const newSession = useCallback(() => {
+    vscodeApi.postMessage({ type: 'newSession' });
+  }, []);
+
+  const switchSession = useCallback((sessionId: string) => {
+    vscodeApi.postMessage({ type: 'switchSession', sessionId });
+  }, []);
+
+  const deleteSession = useCallback((sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    vscodeApi.postMessage({ type: 'deleteSession', sessionId });
   }, []);
 
   useEffect(() => {
@@ -160,6 +216,18 @@ export const App: React.FC = () => {
           setIsLoading(false);
           break;
 
+        case 'sessionsList':
+          setSessions(msg.sessions);
+          setActiveSessionId(msg.activeId);
+          break;
+
+        case 'sessionMessages':
+          setMessages(msg.messages);
+          setStreamingText('');
+          setIsLoading(false);
+          setNeedsApiKey(false);
+          break;
+
         case 'prefillPrompt': {
           const inputEl = document.querySelector('textarea');
           if (inputEl) {
@@ -168,6 +236,9 @@ export const App: React.FC = () => {
           }
           break;
         }
+
+        case 'userMessageEcho':
+          break;
       }
     };
 
@@ -180,15 +251,41 @@ export const App: React.FC = () => {
       <div style={styles.header}>
         <span>MYPI-by-SL</span>
         <div style={styles.headerActions}>
-          <button style={styles.headerBtn} onClick={newChat} title="New chat">+</button>
+          <button style={styles.headerBtn} onClick={newSession} title="New session">+</button>
         </div>
       </div>
+      {sessions.length > 0 && (
+        <div style={styles.tabsBar}>
+          {sessions.map((s) => (
+            <div
+              key={s.id}
+              style={{
+                ...styles.tab,
+                ...(s.id === activeSessionId ? styles.tabActive : {}),
+              }}
+              onClick={() => switchSession(s.id)}
+              title={s.name}
+            >
+              <span>{s.name}</span>
+              {sessions.length > 1 && (
+                <span
+                  style={styles.tabClose}
+                  className="tab-close-btn"
+                  onClick={(e) => deleteSession(s.id, e)}
+                >x</span>
+              )}
+            </div>
+          ))}
+          <button style={styles.newTabBtn} onClick={newSession} title="New session">+</button>
+        </div>
+      )}
+      <style>{'.tab:hover .tab-close-btn { opacity: 0.6 !important; } .tab-close-btn:hover { opacity: 1 !important; color: #f38ba8 !important; }'}</style>
       <div style={styles.main}>
         {needsApiKey && messages.length === 0 && !streamingText && (
           <div style={styles.setupBanner}>
             <div style={styles.setupTitle}>Welcome to MYPI-by-SL</div>
             <div style={styles.setupText}>
-              Set your Anthropic API key to start using the AI coding agent.
+              Set your API key to start using the AI coding agent.
             </div>
             <button style={styles.setupButton} onClick={openCommandPalette}>
               Set API Key

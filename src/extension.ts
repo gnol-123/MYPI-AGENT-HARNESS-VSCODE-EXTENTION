@@ -34,6 +34,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     skillsPath = config.skillsPath || path.join(context.extensionPath, 'skills');
 
     chatProvider = new ChatViewProvider(context.extensionUri);
+    chatProvider.setState(context.globalState);
 
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider('mypi-by-sl.chatView', chatProvider),
