@@ -9,8 +9,10 @@ describe('buildSystemPrompt', () => {
     ];
 
     const prompt = buildSystemPrompt(skills, 'test task');
-    expect(prompt).toContain("SL's PI");
-    expect(prompt).toContain('Do the thing.');
+    expect(prompt).toContain('MYPI-by-SL');
+    expect(prompt).toContain('test skill');
+    expect(prompt).toContain('<available_skill>');
+    expect(prompt).toContain('<name>test</name>');
   });
 
   it('should work with empty skills', () => {
@@ -21,5 +23,14 @@ describe('buildSystemPrompt', () => {
   it('should include task if provided', () => {
     const prompt = buildSystemPrompt([], 'fix the bug');
     expect(prompt).toContain('fix the bug');
+  });
+
+  it('should include skill locations', () => {
+    const skills: Skill[] = [
+      { name: 'debug', description: 'debug skill', instructions: 'Debug.', location: '/skills/debug' },
+    ];
+
+    const prompt = buildSystemPrompt(skills);
+    expect(prompt).toContain('/skills/debug/SKILL.md');
   });
 });

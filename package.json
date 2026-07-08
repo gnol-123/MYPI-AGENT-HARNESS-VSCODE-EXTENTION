@@ -1,128 +1,83 @@
 {
-  "name": "sls-pi",
-  "displayName": "SL's PI",
-  "description": "Full AI coding agent inside VS Code",
+  "name": "mypi-by-sl",
+  "displayName": "MYPI-by-SL",
+  "description": "Full AI coding agent inside VS Code - powered by SL's PI",
   "version": "0.1.0",
   "publisher": "sl",
   "engines": {
     "vscode": "^1.85.0"
   },
   "activationEvents": [
-    "onView:sls-pi.chatView",
-    "onCommand:sls-pi.openChat",
-    "onCommand:sls-pi.setApiKey",
-    "onCommand:sls-pi.explainFile",
-    "onCommand:sls-pi.explainSelection",
-    "onCommand:sls-pi.fixSelection",
-    "onCommand:sls-pi.refactorSelection"
+    "onView:mypi-by-sl.chatView",
+    "onCommand:mypi-by-sl.openChat",
+    "onCommand:mypi-by-sl.setApiKey",
+    "onCommand:mypi-by-sl.explainFile",
+    "onCommand:mypi-by-sl.explainSelection",
+    "onCommand:mypi-by-sl.fixSelection",
+    "onCommand:mypi-by-sl.refactorSelection"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      {
-        "command": "sls-pi.openChat",
-        "title": "SL's PI: Open Chat"
-      },
-      {
-        "command": "sls-pi.setApiKey",
-        "title": "SL's PI: Set API Key"
-      },
-      {
-        "command": "sls-pi.explainFile",
-        "title": "SL's PI: Explain this file"
-      },
-      {
-        "command": "sls-pi.explainSelection",
-        "title": "SL's PI: Explain selection"
-      },
-      {
-        "command": "sls-pi.fixSelection",
-        "title": "SL's PI: Fix selection"
-      },
-      {
-        "command": "sls-pi.refactorSelection",
-        "title": "SL's PI: Refactor selection"
-      }
+      { "command": "mypi-by-sl.openChat", "title": "MYPI-by-SL: Open Chat" },
+      { "command": "mypi-by-sl.setApiKey", "title": "MYPI-by-SL: Set API Key" },
+      { "command": "mypi-by-sl.explainFile", "title": "MYPI-by-SL: Explain this file" },
+      { "command": "mypi-by-sl.explainSelection", "title": "MYPI-by-SL: Explain selection" },
+      { "command": "mypi-by-sl.fixSelection", "title": "MYPI-by-SL: Fix selection" },
+      { "command": "mypi-by-sl.refactorSelection", "title": "MYPI-by-SL: Refactor selection" }
     ],
     "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "sls-pi-sidebar",
-          "title": "SL's PI",
-          "icon": "$(comment-discussion)"
-        }
-      ]
+      "activitybar": [{
+        "id": "mypi-by-sl-sidebar",
+        "title": "MYPI-by-SL",
+        "icon": "assets/cat-icon.svg"
+      }]
     },
     "views": {
-      "sls-pi-sidebar": [
-        {
-          "type": "webview",
-          "id": "sls-pi.chatView",
-          "name": "Chat"
-        }
-      ]
+      "mypi-by-sl-sidebar": [{
+        "type": "webview",
+        "id": "mypi-by-sl.chatView",
+        "name": "Chat"
+      }]
     },
     "menus": {
-      "explorer/context": [
-        {
-          "command": "sls-pi.explainFile",
-          "group": "sls-pi",
-          "when": "resource"
-        }
-      ],
+      "explorer/context": [{
+        "command": "mypi-by-sl.explainFile",
+        "group": "mypi-by-sl",
+        "when": "resource"
+      }],
       "editor/context": [
-        {
-          "command": "sls-pi.explainSelection",
-          "group": "sls-pi",
-          "when": "editorHasSelection"
-        },
-        {
-          "command": "sls-pi.fixSelection",
-          "group": "sls-pi",
-          "when": "editorHasSelection"
-        },
-        {
-          "command": "sls-pi.refactorSelection",
-          "group": "sls-pi",
-          "when": "editorHasSelection"
-        }
+        { "command": "mypi-by-sl.explainSelection", "group": "mypi-by-sl", "when": "editorHasSelection" },
+        { "command": "mypi-by-sl.fixSelection", "group": "mypi-by-sl", "when": "editorHasSelection" },
+        { "command": "mypi-by-sl.refactorSelection", "group": "mypi-by-sl", "when": "editorHasSelection" }
       ]
     },
     "configuration": {
-      "title": "SL's PI",
+      "title": "MYPI-by-SL",
       "properties": {
-        "sls-pi.provider": {
-          "type": "string",
-          "default": "anthropic",
-          "enum": [
-            "anthropic",
-            "openai-compatible"
-          ],
+        "mypi-by-sl.provider": {
+          "type": "string", "default": "anthropic",
+          "enum": ["anthropic", "openai-compatible"],
           "description": "LLM provider"
         },
-        "sls-pi.model": {
-          "type": "string",
-          "default": "claude-sonnet-4-20250514",
+        "mypi-by-sl.model": {
+          "type": "string", "default": "claude-sonnet-4-20250514",
           "description": "Model ID to use"
         },
-        "sls-pi.apiEndpoint": {
-          "type": "string",
-          "default": "",
+        "mypi-by-sl.apiEndpoint": {
+          "type": "string", "default": "",
           "description": "Base URL for openai-compatible provider"
         },
-        "sls-pi.maxTokens": {
-          "type": "number",
-          "default": 8192,
+        "mypi-by-sl.maxTokens": {
+          "type": "number", "default": 8192,
           "description": "Maximum tokens per response"
         },
-        "sls-pi.toolTimeout": {
-          "type": "number",
-          "default": 120,
+        "mypi-by-sl.toolTimeout": {
+          "type": "number", "default": 120,
           "description": "Maximum seconds for bash commands"
         },
-        "sls-pi.skillsPath": {
-          "type": "string",
-          "default": "",
+        "mypi-by-sl.skillsPath": {
+          "type": "string", "default": "",
           "description": "Override skill directory (empty = use bundled)"
         }
       }

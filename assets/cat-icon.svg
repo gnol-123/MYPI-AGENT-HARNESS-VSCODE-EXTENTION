@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 48 48" fill="none">
+  <!-- Head -->
+  <ellipse cx="24" cy="27" rx="16" ry="14" fill="#cba6f7" opacity="0.15"/>
+  <!-- Left ear -->
+  <path d="M11 20 L14 8 L19 17" fill="#cba6f7" opacity="0.2" stroke="#cba6f7" stroke-width="2" stroke-linejoin="round"/>
+  <!-- Right ear -->
+  <path d="M37 20 L34 8 L29 17" fill="#cba6f7" opacity="0.2" stroke="#cba6f7" stroke-width="2" stroke-linejoin="round"/>
+  <!-- Inner left ear -->
+  <path d="M14 17 L15 12 L17 16" fill="#f5c2e7" opacity="0.3"/>
+  <!-- Inner right ear -->
+  <path d="M34 17 L33 12 L31 16" fill="#f5c2e7" opacity="0.3"/>
+  <!-- Left eye -->
+  <ellipse cx="18" cy="25" rx="3.5" ry="4" fill="#cdd6f4"/>
+  <!-- Right eye -->
+  <ellipse cx="30" cy="25" rx="3.5" ry="4" fill="#cdd6f4"/>
+  <!-- Left pupil -->
+  <ellipse cx="18" cy="25" rx="2" ry="2.5" fill="#1e1e2e"/>
+  <!-- Right pupil -->
+  <ellipse cx="30" cy="25" rx="2" ry="2.5" fill="#1e1e2e"/>
+  <!-- Left eye shine -->
+  <circle cx="16.5" cy="23.5" r="1" fill="white" opacity="0.6"/>
+  <!-- Right eye shine -->
+  <circle cx="28.5" cy="23.5" r="1" fill="white" opacity="0.6"/>
+  <!-- Nose -->
+  <path d="M22.5 30 L24 32.5 L25.5 30" fill="#f5c2e7" stroke="#f5c2e7" stroke-width="1"/>
+  <!-- Mouth center -->
+  <line x1="24" y1="32.5" x2="24" y2="34" stroke="#a6adc8" stroke-width="1"/>
+  <!-- Mouth left -->
+  <path d="M21 34.5 Q24 36.5 24 34" fill="none" stroke="#a6adc8" stroke-width="1"/>
+  <!-- Mouth right -->
+  <path d="M27 34.5 Q24 36.5 24 34" fill="none" stroke="#a6adc8" stroke-width="1"/>
+  <!-- Left whiskers -->
+  <line x1="5" y1="26" x2="14" y2="27" stroke="#a6adc8" stroke-width="0.8" opacity="0.5"/>
+  <line x1="5" y1="31" x2="14" y2="30" stroke="#a6adc8" stroke-width="0.8" opacity="0.5"/>
+  <!-- Right whiskers -->
+  <line x1="43" y1="26" x2="34" y2="27" stroke="#a6adc8" stroke-width="0.8" opacity="0.5"/>
+  <line x1="43" y1="31" x2="34" y2="30" stroke="#a6adc8" stroke-width="0.8" opacity="0.5"/>
+</svg>

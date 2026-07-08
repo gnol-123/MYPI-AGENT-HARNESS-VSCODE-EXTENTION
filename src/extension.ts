@@ -9,6 +9,7 @@ import { writeTool } from './tools/write';
 import { editTool } from './tools/edit';
 import { bashTool } from './tools/bash';
 import { webFetchTool } from './tools/web-fetch';
+import { context7Tool } from './tools/context7';
 import { loadSkills } from './skills/loader';
 import { createAnthropicProvider } from './providers/anthropic';
 import { createOpenAICompatProvider } from './providers/openai-compat';
@@ -26,6 +27,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   toolRegistry.register(editTool);
   toolRegistry.register(bashTool);
   toolRegistry.register(webFetchTool);
+  toolRegistry.register(context7Tool);
 
   const config = getConfig();
   skillsPath = config.skillsPath || path.join(context.extensionPath, 'skills');
@@ -33,19 +35,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   chatProvider = new ChatViewProvider(context.extensionUri);
 
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider('sls-pi.chatView', chatProvider),
-    vscode.commands.registerCommand('sls-pi.openChat', () => openChat(context)),
-    vscode.commands.registerCommand('sls-pi.setApiKey', () => promptSetApiKey(context)),
-    vscode.commands.registerCommand('sls-pi.explainFile', (uri?: vscode.Uri) =>
+    vscode.window.registerWebviewViewProvider('mypi-by-sl.chatView', chatProvider),
+    vscode.commands.registerCommand('mypi-by-sl.openChat', () => openChat(context)),
+    vscode.commands.registerCommand('mypi-by-sl.setApiKey', () => promptSetApiKey(context)),
+    vscode.commands.registerCommand('mypi-by-sl.explainFile', (uri?: vscode.Uri) =>
       contextAction(context, 'explainFile', uri),
     ),
-    vscode.commands.registerCommand('sls-pi.explainSelection', () =>
+    vscode.commands.registerCommand('mypi-by-sl.explainSelection', () =>
       contextAction(context, 'explainSelection'),
     ),
-    vscode.commands.registerCommand('sls-pi.fixSelection', () =>
+    vscode.commands.registerCommand('mypi-by-sl.fixSelection', () =>
       contextAction(context, 'fixSelection'),
     ),
-    vscode.commands.registerCommand('sls-pi.refactorSelection', () =>
+    vscode.commands.registerCommand('mypi-by-sl.refactorSelection', () =>
       contextAction(context, 'refactorSelection'),
     ),
   );
@@ -137,7 +139,7 @@ async function createAgentLoop(context: vscode.ExtensionContext): Promise<AgentL
   const apiKey = await getApiKey(context.secrets);
   if (!apiKey) {
     const result = await vscode.window.showErrorMessage(
-      "No API key configured. Set one to use SL's PI.",
+      "No API key configured. Set one to use MYPI-by-SL.",
       'Set API Key',
     );
     if (result === 'Set API Key') {

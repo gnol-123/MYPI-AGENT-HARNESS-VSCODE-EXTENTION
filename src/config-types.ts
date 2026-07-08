@@ -18,11 +18,11 @@ const DEFAULT_CONFIG: SLSConfig = {
 
 export function buildConfig(raw: Record<string, unknown>): SLSConfig {
   return {
-    provider: (raw['sls-pi.provider'] as SLSConfig['provider']) ?? DEFAULT_CONFIG.provider,
-    model: (raw['sls-pi.model'] as string) ?? DEFAULT_CONFIG.model,
-    apiEndpoint: (raw['sls-pi.apiEndpoint'] as string) ?? DEFAULT_CONFIG.apiEndpoint,
-    maxTokens: (raw['sls-pi.maxTokens'] as number) ?? DEFAULT_CONFIG.maxTokens,
-    toolTimeout: (raw['sls-pi.toolTimeout'] as number) ?? DEFAULT_CONFIG.toolTimeout,
-    skillsPath: (raw['sls-pi.skillsPath'] as string) ?? DEFAULT_CONFIG.skillsPath,
+    provider: (raw['mypi-by-sl.provider'] as SLSConfig['provider']) ?? DEFAULT_CONFIG.provider,
+    model: (raw['mypi-by-sl.model'] as string) ?? DEFAULT_CONFIG.model,
+    apiEndpoint: (raw['mypi-by-sl.apiEndpoint'] as string) ?? DEFAULT_CONFIG.apiEndpoint,
+    maxTokens: (raw['mypi-by-sl.maxTokens'] as number) ?? DEFAULT_CONFIG.maxTokens,
+    toolTimeout: (raw['mypi-by-sl.toolTimeout'] as number) ?? DEFAULT_CONFIG.toolTimeout,
+    skillsPath: (raw['mypi-by-sl.skillsPath'] as string) ?? DEFAULT_CONFIG.skillsPath,
   };
 }

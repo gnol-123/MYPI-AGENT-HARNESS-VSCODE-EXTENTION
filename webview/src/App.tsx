@@ -115,7 +115,7 @@ export const App: React.FC = () => {
 
   return (
     <div style={styles.container}>
-      <div style={styles.header}>SL's PI</div>
+      <div style={styles.header}>MYPI-by-SL</div>
       <div style={styles.main}>
         <ChatView
           messages={messages}

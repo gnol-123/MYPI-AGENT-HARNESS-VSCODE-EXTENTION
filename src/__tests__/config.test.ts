@@ -4,12 +4,12 @@ import { buildConfig } from '../config-types';
 describe('buildConfig', () => {
   it('should construct config from settings', () => {
     const settings = {
-      'sls-pi.provider': 'anthropic',
-      'sls-pi.model': 'claude-sonnet-4-20250514',
-      'sls-pi.apiEndpoint': '',
-      'sls-pi.maxTokens': 8192,
-      'sls-pi.toolTimeout': 120,
-      'sls-pi.skillsPath': '',
+      'mypi-by-sl.provider': 'anthropic',
+      'mypi-by-sl.model': 'claude-sonnet-4-20250514',
+      'mypi-by-sl.apiEndpoint': '',
+      'mypi-by-sl.maxTokens': 8192,
+      'mypi-by-sl.toolTimeout': 120,
+      'mypi-by-sl.skillsPath': '',
     };
 
     const config = buildConfig(settings);
@@ -29,12 +29,12 @@ describe('buildConfig', () => {
 
   it('should handle openai-compatible provider', () => {
     const config = buildConfig({
-      'sls-pi.provider': 'openai-compatible',
-      'sls-pi.model': 'gpt-4',
-      'sls-pi.apiEndpoint': 'https://custom.api/v1',
-      'sls-pi.maxTokens': 4096,
-      'sls-pi.toolTimeout': 60,
-      'sls-pi.skillsPath': '/custom/skills',
+      'mypi-by-sl.provider': 'openai-compatible',
+      'mypi-by-sl.model': 'gpt-4',
+      'mypi-by-sl.apiEndpoint': 'https://custom.api/v1',
+      'mypi-by-sl.maxTokens': 4096,
+      'mypi-by-sl.toolTimeout': 60,
+      'mypi-by-sl.skillsPath': '/custom/skills',
     });
 
     expect(config.provider).toBe('openai-compatible');
