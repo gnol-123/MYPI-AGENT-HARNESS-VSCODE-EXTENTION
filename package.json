@@ -7,7 +7,15 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:sls-pi.chatView",
+    "onCommand:sls-pi.openChat",
+    "onCommand:sls-pi.setApiKey",
+    "onCommand:sls-pi.explainFile",
+    "onCommand:sls-pi.explainSelection",
+    "onCommand:sls-pi.fixSelection",
+    "onCommand:sls-pi.refactorSelection"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -132,12 +140,13 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.19.0",
     "typescript": "^5.3.0",
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.20.0"
+    "@anthropic-ai/sdk": "^0.110.0"
   },
   "allowScripts": {
     "esbuild@0.19.12": true

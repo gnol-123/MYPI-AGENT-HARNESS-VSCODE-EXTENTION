@@ -1,76 +1,85 @@
 import * as vscode from 'vscode';
 import { AgentLoop } from '../agent/loop';
+import { LLMEvent } from '../providers/types';
 
-export class ChatPanel {
-  public static currentPanel: ChatPanel | undefined;
-  private readonly panel: vscode.WebviewPanel;
-  private readonly extensionUri: vscode.Uri;
-  private agentLoop: AgentLoop;
-  private disposables: vscode.Disposable[] = [];
+export class ChatViewProvider implements vscode.WebviewViewProvider {
+  public static currentProvider: ChatViewProvider | undefined;
+  private view: vscode.WebviewView | undefined;
+  private agentLoop: AgentLoop | undefined;
+  private extensionUri: vscode.Uri;
+  private pendingPrompt: string | undefined;
 
-  private constructor(
-    panel: vscode.WebviewPanel,
-    extensionUri: vscode.Uri,
-    agentLoop: AgentLoop,
-  ) {
-    this.panel = panel;
+  constructor(extensionUri: vscode.Uri) {
     this.extensionUri = extensionUri;
+  }
+
+  setAgentLoop(agentLoop: AgentLoop): void {
     this.agentLoop = agentLoop;
-
-    this.panel.webview.html = this.getHtml();
-
-    this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
-
-    this.panel.webview.onDidReceiveMessage(
-      (message) => this.handleMessage(message),
-      null,
-      this.disposables,
-    );
   }
 
-  static createOrShow(extensionUri: vscode.Uri, agentLoop: AgentLoop): ChatPanel {
-    if (ChatPanel.currentPanel) {
-      ChatPanel.currentPanel.panel.reveal(vscode.ViewColumn.Two);
-      ChatPanel.currentPanel.agentLoop = agentLoop;
-      return ChatPanel.currentPanel;
+  setPendingPrompt(text: string): void {
+    this.pendingPrompt = text;
+    if (this.view) {
+      this.postMessage({ type: 'prefillPrompt', text });
+      this.pendingPrompt = undefined;
     }
-
-    const panel = vscode.window.createWebviewPanel(
-      'sls-pi.chat',
-      "SL's PI",
-      vscode.ViewColumn.Two,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'webview')],
-      },
-    );
-
-    ChatPanel.currentPanel = new ChatPanel(panel, extensionUri, agentLoop);
-    return ChatPanel.currentPanel;
   }
 
-  static sendToWebview(message: Record<string, unknown>): void {
-    ChatPanel.currentPanel?.panel.webview.postMessage(message);
+  resolveWebviewView(webviewView: vscode.WebviewView): void {
+    this.view = webviewView;
+    ChatViewProvider.currentProvider = this;
+
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'webview')],
+    };
+
+    webviewView.webview.html = this.getHtml(webviewView.webview);
+
+    webviewView.webview.onDidReceiveMessage((message) => {
+      this.handleMessage(message);
+    });
+
+    if (this.pendingPrompt) {
+      this.postMessage({ type: 'prefillPrompt', text: this.pendingPrompt });
+      this.pendingPrompt = undefined;
+    }
   }
 
-  async handleMessage(message: Record<string, unknown>): Promise<void> {
+  static postToWebview(message: Record<string, unknown>): void {
+    ChatViewProvider.currentProvider?.postMessage(message);
+  }
+
+  private postMessage(message: Record<string, unknown>): void {
+    this.view?.webview.postMessage(message);
+  }
+
+  private async handleMessage(message: Record<string, unknown>): Promise<void> {
     switch (message.type) {
       case 'userMessage': {
         const text = message.text as string;
-        ChatPanel.sendToWebview({
+        if (!this.agentLoop) {
+          this.postMessage({
+            type: 'error',
+            message: 'No API key configured. Run "SL\'s PI: Set API Key" from the command palette.',
+            retryable: false,
+          });
+          return;
+        }
+
+        this.postMessage({
           type: 'userMessageEcho',
           text,
           id: Date.now().toString(),
         });
 
-        await this.agentLoop.run(text, (event) => {
+        await this.agentLoop.run(text, (event: LLMEvent) => {
           switch (event.type) {
             case 'text':
-              ChatPanel.sendToWebview({ type: 'assistantStreamChunk', text: event.text });
+              this.postMessage({ type: 'assistantStreamChunk', text: event.text });
               break;
             case 'tool_use':
-              ChatPanel.sendToWebview({
+              this.postMessage({
                 type: 'toolCallStart',
                 id: event.id,
                 name: event.name,
@@ -78,14 +87,14 @@ export class ChatPanel {
               });
               break;
             case 'error':
-              ChatPanel.sendToWebview({
+              this.postMessage({
                 type: 'error',
                 message: event.message,
                 retryable: true,
               });
               break;
             case 'done':
-              ChatPanel.sendToWebview({ type: 'done', turnId: Date.now().toString() });
+              this.postMessage({ type: 'done', turnId: Date.now().toString() });
               break;
           }
         });
@@ -94,16 +103,12 @@ export class ChatPanel {
     }
   }
 
-  prefillPrompt(text: string): void {
-    ChatPanel.sendToWebview({ type: 'prefillPrompt', text });
-  }
-
-  private getHtml(): string {
-    const webviewUri = this.panel.webview.asWebviewUri(
+  private getHtml(webview: vscode.Webview): string {
+    const webviewUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'webview'),
     );
 
-    const cspSource = this.panel.webview.cspSource;
+    const cspSource = webview.cspSource;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -123,13 +128,5 @@ export class ChatPanel {
   <script src="${webviewUri}/out/bundle.js"></script>
 </body>
 </html>`;
-  }
-
-  dispose(): void {
-    ChatPanel.currentPanel = undefined;
-    this.panel.dispose();
-    for (const d of this.disposables) {
-      d.dispose();
-    }
   }
 }
