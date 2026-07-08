@@ -7,3 +7,11 @@ webview/src/**
 webview/tsconfig.json
 webview/node_modules/**
 esbuild.js
+vitest.config.ts
+.superpowers/**
+docs/**
+scripts/copy-skills.js
+.gitignore
+README.md
+package-lock.json
+webview/package-lock.json
