@@ -176,7 +176,7 @@ async function createAgentLoop(context: vscode.ExtensionContext): Promise<AgentL
 
   const skills = await loadSkills(skillsPath);
 
-  return new AgentLoop(provider, toolRegistry, skills, config.maxTokens);
+  return new AgentLoop(provider, toolRegistry, skills, config.maxTokens, preset.defaultModel, preset.name);
 }
 
 export function deactivate(): void {

@@ -6,13 +6,38 @@ import { buildSystemPrompt } from './system-prompt';
 
 const MAX_TOOL_ITERATIONS = 25;
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export interface AgentStatus {
+  cwd: string;
+  model: string;
+  provider: string;
+  tokenUsage: TokenUsage;
+}
+
 export class AgentLoop {
+  private tokenUsage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+
   constructor(
     private provider: LLMProvider,
     private toolRegistry: ToolRegistry,
     private skills: Skill[],
     private maxTokens: number,
+    private modelName: string = '',
+    private providerName: string = '',
   ) {}
+
+  getStatus(): AgentStatus {
+    return {
+      cwd: process.cwd(),
+      model: this.modelName,
+      provider: this.providerName,
+      tokenUsage: { ...this.tokenUsage },
+    };
+  }
 
   async run(
     userMessage: string,

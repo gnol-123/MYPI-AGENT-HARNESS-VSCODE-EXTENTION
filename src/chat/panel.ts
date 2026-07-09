@@ -38,6 +38,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   setAgentLoop(agentLoop: AgentLoop): void {
     this.agentLoop = agentLoop;
+    this.sendStatus();
   }
 
   setPendingPrompt(text: string): void {
@@ -149,6 +150,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       this.createSession('Chat 1');
     }
     return this.sessions.get(this.activeSessionId)!;
+  }
+
+  private sendStatus(): void {
+    if (this.agentLoop) {
+      const status = this.agentLoop.getStatus();
+      // Shorten cwd for display
+      const home = process.env.HOME || process.env.USERPROFILE || '';
+      if (home && status.cwd.startsWith(home)) {
+        status.cwd = '~' + status.cwd.slice(home.length);
+      }
+      this.postMessage({ type: 'agentStatus', ...status });
+    }
   }
 
   private sendSessionsList(): void {
@@ -267,6 +280,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               break;
             case 'done':
               this.postMessage({ type: 'done', turnId: Date.now().toString() });
+              this.sendStatus();
               break;
           }
         });

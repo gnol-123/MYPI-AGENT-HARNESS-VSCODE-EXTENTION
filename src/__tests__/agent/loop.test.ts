@@ -33,11 +33,15 @@ describe('AgentLoop', () => {
     const registry = new ToolRegistry();
     const skills: Skill[] = [];
 
-    const loop = new AgentLoop(provider, registry, skills, 8192);
+    const loop = new AgentLoop(provider, registry, skills, 8192, 'test-model', 'test-provider');
     const events: LLMEvent[] = [];
     await loop.run('Hi', (event) => events.push(event));
 
     expect(events.some((e) => e.type === 'text')).toBe(true);
+    const status = loop.getStatus();
+    expect(status.model).toBe('test-model');
+    expect(status.provider).toBe('test-provider');
+    expect(status.cwd).toBeDefined();
   });
 
   it('should handle tool calls and loop back', async () => {
@@ -61,7 +65,7 @@ describe('AgentLoop', () => {
     });
 
     const skills: Skill[] = [];
-    const loop = new AgentLoop(provider, registry, skills, 8192);
+    const loop = new AgentLoop(provider, registry, skills, 8192, 'test-model', 'test-provider');
     const events: LLMEvent[] = [];
     await loop.run('Read test.ts', (event) => events.push(event));
 
@@ -77,11 +81,25 @@ describe('AgentLoop', () => {
     const registry = new ToolRegistry();
     const skills: Skill[] = [];
 
-    const loop = new AgentLoop(provider, registry, skills, 8192);
+    const loop = new AgentLoop(provider, registry, skills, 8192, 'test-model', 'test-provider');
     const events: LLMEvent[] = [];
     await loop.run('Hi', (event) => events.push(event));
 
     const errorEvents = events.filter((e) => e.type === 'error');
     expect(errorEvents).toHaveLength(1);
+  });
+
+  it('should return agent status', () => {
+    const provider = createMockProvider([]);
+    const registry = new ToolRegistry();
+    const skills: Skill[] = [];
+
+    const loop = new AgentLoop(provider, registry, skills, 8192, 'gpt-4', 'OpenAI');
+    const status = loop.getStatus();
+    expect(status.cwd).toBeDefined();
+    expect(status.model).toBe('gpt-4');
+    expect(status.provider).toBe('OpenAI');
+    expect(status.tokenUsage.inputTokens).toBe(0);
+    expect(status.tokenUsage.outputTokens).toBe(0);
   });
 });

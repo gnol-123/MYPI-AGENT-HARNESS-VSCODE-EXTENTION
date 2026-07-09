@@ -123,6 +123,23 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '3px',
     lineHeight: 1,
   },
+  statusBar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    padding: '2px 10px',
+    fontSize: '10px',
+    color: 'var(--vscode-descriptionForeground)',
+    borderTop: '1px solid var(--vscode-sideBarSectionHeader-border)',
+    gap: '8px',
+  },
+  statusItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
 };
 
 export const App: React.FC = () => {
@@ -133,6 +150,7 @@ export const App: React.FC = () => {
   const [needsApiKey, setNeedsApiKey] = useState(false);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [activeSessionId, setActiveSessionId] = useState('');
+  const [agentStatus, setAgentStatus] = useState({ cwd: '', model: '', provider: '', tokenUsage: { inputTokens: 0, outputTokens: 0 } });
 
   const sendMessage = useCallback((text: string) => {
     const userMsg: Message = {
@@ -228,6 +246,15 @@ export const App: React.FC = () => {
           setNeedsApiKey(false);
           break;
 
+        case 'agentStatus':
+          setAgentStatus({
+            cwd: msg.cwd,
+            model: msg.model,
+            provider: msg.provider,
+            tokenUsage: msg.tokenUsage,
+          });
+          break;
+
         case 'prefillPrompt': {
           const inputEl = document.querySelector('textarea');
           if (inputEl) {
@@ -297,6 +324,17 @@ export const App: React.FC = () => {
           streamingText={streamingText}
           isLoading={isLoading}
         />
+        {agentStatus.cwd && (
+          <div style={styles.statusBar}>
+            <span style={styles.statusItem} title={agentStatus.cwd}>{agentStatus.cwd}</span>
+            <span style={styles.statusItem}>{agentStatus.provider} · {agentStatus.model}</span>
+            <span style={styles.statusItem}>
+              {agentStatus.tokenUsage.inputTokens + agentStatus.tokenUsage.outputTokens > 0
+                ? `${(agentStatus.tokenUsage.inputTokens + agentStatus.tokenUsage.outputTokens).toLocaleString()} tokens`
+                : ''}
+            </span>
+          </div>
+        )}
         <InputBox onSend={sendMessage} disabled={isLoading} />
       </div>
     </div>

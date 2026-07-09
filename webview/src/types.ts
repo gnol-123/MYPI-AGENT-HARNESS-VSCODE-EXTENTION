@@ -46,12 +46,20 @@ export interface SessionMessages {
   messages: Message[];
 }
 
+export interface AgentStatus {
+  type: 'agentStatus';
+  cwd: string;
+  model: string;
+  provider: string;
+  tokenUsage: { inputTokens: number; outputTokens: number };
+}
+
 export interface PrefillPrompt {
   type: 'prefillPrompt';
   text: string;
 }
 
-export type HostToWebview = AssistantStreamChunk | ToolCallStart | ToolCallResult | AgentError | AgentDone | SessionsList | SessionMessages | PrefillPrompt;
+export type HostToWebview = AssistantStreamChunk | ToolCallStart | ToolCallResult | AgentError | AgentDone | SessionsList | SessionMessages | PrefillPrompt | AgentStatus;
 export type WebviewToHost = UserMessage | { type: 'cancelRequest' } | { type: 'runCommand'; command: string } | { type: 'switchSession'; sessionId: string } | { type: 'newSession' } | { type: 'deleteSession'; sessionId: string };
 
 export interface Message {
