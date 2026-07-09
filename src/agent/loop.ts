@@ -160,6 +160,13 @@ export class AgentLoop {
             if (!signal.aborted) continue;
             break;
           }
+          // Save whatever partial text we have before throwing
+          if (currentText || toolCalls.length > 0) {
+            history.addAssistantMessage(
+              currentText + (msg.includes('network') ? `\n\n[Connection lost: ${msg}]` : ''),
+              toolCalls.length > 0 ? toolCalls : undefined,
+            );
+          }
           throw streamErr;
         }
 

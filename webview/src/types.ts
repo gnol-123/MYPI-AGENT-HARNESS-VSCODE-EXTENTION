@@ -151,6 +151,22 @@ export interface ToolCallEntry {
   isError?: boolean;
 }
 
+/** Ordered block in the streaming timeline - matches PI's inline approach */
+export interface StreamBlock {
+  id: string;
+  type: 'text' | 'thinking' | 'tool_call';
+  /** Accumulated text (for text/thinking blocks) */
+  text?: string;
+  /** Tool metadata (for tool_call blocks) */
+  toolName?: string;
+  toolParams?: Record<string, unknown>;
+  toolResult?: string;
+  toolTruncated?: boolean;
+  toolIsError?: boolean;
+  /** True once this block is finalized and won't receive more updates */
+  completed: boolean;
+}
+
 export interface SessionInfo {
   id: string;
   name: string;

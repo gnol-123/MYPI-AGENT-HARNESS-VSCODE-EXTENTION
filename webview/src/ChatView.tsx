@@ -16,6 +16,7 @@ interface ChatViewProps {
   queuedCount: number;
   queuedTexts: string[];
   liveToolCalls?: ToolCallEntry[];
+  streamBlocks?: import('./types').StreamBlock[];
   onAbort: () => void;
   onCancelQueued: (index: number) => void;
 }
@@ -113,14 +114,14 @@ function renderMarkdown(text: string): string {
   return marked.parse(text, { renderer, breaks: true, gfm: true }) as string;
 }
 
-export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isLoading, waiting, thinking, thinkingText, isRunning, queuedCount, queuedTexts, liveToolCalls, onAbort, onCancelQueued }) => {
+export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isLoading, waiting, thinking, thinkingText, isRunning, queuedCount, queuedTexts, liveToolCalls, streamBlocks, onAbort, onCancelQueued }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll on any content change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingText, thinkingText, waiting, queuedCount, liveToolCalls]);
+  }, [messages, streamingText, thinkingText, waiting, queuedCount, liveToolCalls, streamBlocks]);
 
   // Render streaming preview as markdown
   const streamingHtml = useMemo(() => {
@@ -246,17 +247,52 @@ export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isL
         </div>
       )}
 
-      {/* Live tool calls during streaming */}
-      {liveToolCalls && liveToolCalls.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-          {liveToolCalls.map((tc) => (
-            <ToolCardComponent key={tc.id} tc={tc} />
-          ))}
+      {/* Unified stream blocks — renders text, thinking, and tool calls INLINE in arrival order */}
+      {streamBlocks && streamBlocks.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: '4px' }}>
+          {streamBlocks.map((block, bi) => {
+            if (block.type === 'tool_call') {
+              return (
+                <ToolCardComponent
+                  key={block.id}
+                  tc={{
+                    id: block.id,
+                    name: block.toolName ?? '',
+                    params: block.toolParams ?? {},
+                    result: block.toolResult,
+                    truncated: block.toolTruncated,
+                    isError: block.toolIsError,
+                  }}
+                />
+              );
+            }
+            if (block.type === 'thinking') {
+              return (
+                <div key={block.id} className="mypi-thinking-block">
+                  {block.text}
+                </div>
+              );
+            }
+            // text block
+            const isLastTextBlock = bi === streamBlocks.length - 1 && block.type === 'text' && !block.completed;
+            return (
+              <div key={block.id}>
+                <div className="mypi-role" style={{ color: '#cba6f7', marginBottom: '2px' }}>MYPI</div>
+                <div
+                  className="mypi-md-content"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(block.text ?? '') }}
+                />
+                {isLastTextBlock && isLoading && (
+                  <span className="mypi-cursor-blink" />
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Streaming text rendered as markdown */}
-      {streamingText && (
+      {/* Fallback: use old streaming text if no blocks yet */}
+      {(!streamBlocks || streamBlocks.length === 0) && streamingText && (
         <div className="mypi-streaming">
           <div className="mypi-role" style={{ color: '#cba6f7' }}>MYPI</div>
           <div

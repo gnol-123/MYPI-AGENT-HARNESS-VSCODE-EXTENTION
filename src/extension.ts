@@ -63,8 +63,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     };
     chatProvider.onToggleThinking = (effort: 'low' | 'medium' | 'high') => {
-      // Low effort = disable API-level chain-of-thought (fast, token-efficient)
-      currentAgentLoop?.setThinkingEnabled(effort !== 'low');
+      // Only 'high' enables expensive API-level chain-of-thought reasoning
+      // 'low' and 'medium' disable it for fast, token-efficient responses
+      currentAgentLoop?.setThinkingEnabled(effort === 'high');
     };
 
     context.subscriptions.push(

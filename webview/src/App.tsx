@@ -288,6 +288,8 @@ export const App: React.FC = () => {
   const [thinkingEffort, setThinkingEffort] = useState<'low' | 'medium' | 'high'>('medium');
   const [runningSessions, setRunningSessions] = useState<Set<string>>(new Set());
   const [liveToolResultsBySession, setLiveToolResultsBySession] = useState<Map<string, Map<string, { result: string; truncated?: boolean; isError?: boolean }>>>(new Map());
+  /** Ordered stream blocks for inline rendering (PI-style) */
+  const [streamBlocksBySession, setStreamBlocksBySession] = useState<Map<string, import('./types').StreamBlock[]>>(new Map());
 
   const streamingText = streamingBySession.get(activeSessionId) ?? '';
   const isLoading = streamingBySession.has(activeSessionId);
@@ -300,6 +302,7 @@ export const App: React.FC = () => {
   const queuedTexts = queuedBySession.get(activeSessionId) ?? [];
   const networkError = networkErrorBySession.get(activeSessionId) ?? '';
   const liveToolResults = liveToolResultsBySession.get(activeSessionId);
+  const streamBlocks = streamBlocksBySession.get(activeSessionId) ?? [];
 
   // Compute live tool calls for display during streaming
   const liveToolCalls = (() => {
@@ -340,6 +343,11 @@ export const App: React.FC = () => {
     setThinkingBySession((prev) => new Map(prev).set(activeSessionId, ''));
     setToolCallsBySession((prev) => new Map(prev).set(activeSessionId, new Map()));
     setLiveToolResultsBySession((prev) => {
+      const next = new Map(prev);
+      next.delete(activeSessionId);
+      return next;
+    });
+    setStreamBlocksBySession((prev) => {
       const next = new Map(prev);
       next.delete(activeSessionId);
       return next;
@@ -452,6 +460,19 @@ export const App: React.FC = () => {
             next.delete(msg.sessionId);
             return next;
           });
+          // Append to stream blocks for inline ordering
+          setStreamBlocksBySession((prev) => {
+            const next = new Map(prev);
+            const blocks = [...(next.get(msg.sessionId) ?? [])];
+            const last = blocks[blocks.length - 1];
+            if (last && last.type === 'text' && !last.completed) {
+              blocks[blocks.length - 1] = { ...last, text: (last.text ?? '') + msg.text };
+            } else {
+              blocks.push({ id: `t-${Date.now()}-${Math.random().toString(36).slice(2,5)}`, type: 'text', text: msg.text, completed: false });
+            }
+            next.set(msg.sessionId, blocks);
+            return next;
+          });
           break;
 
         case 'thinking':
@@ -467,6 +488,19 @@ export const App: React.FC = () => {
             next.set(msg.sessionId, existing + msg.text);
             return next;
           });
+          // Append to stream blocks
+          setStreamBlocksBySession((prev) => {
+            const next = new Map(prev);
+            const blocks = [...(next.get(msg.sessionId) ?? [])];
+            const last = blocks[blocks.length - 1];
+            if (last && last.type === 'thinking' && !last.completed) {
+              blocks[blocks.length - 1] = { ...last, text: (last.text ?? '') + msg.text };
+            } else {
+              blocks.push({ id: `th-${Date.now()}-${Math.random().toString(36).slice(2,5)}`, type: 'thinking', text: msg.text, completed: false });
+            }
+            next.set(msg.sessionId, blocks);
+            return next;
+          });
           break;
 
         case 'sessionUsage':
@@ -479,6 +513,20 @@ export const App: React.FC = () => {
             const inner = new Map(next.get(msg.sessionId) ?? []);
             inner.set(msg.id, { name: msg.name, params: msg.params });
             next.set(msg.sessionId, inner);
+            return next;
+          });
+          // Add tool call as a stream block (inline with text)
+          setStreamBlocksBySession((prev) => {
+            const next = new Map(prev);
+            const blocks = [...(next.get(msg.sessionId) ?? [])];
+            blocks.push({
+              id: msg.id,
+              type: 'tool_call',
+              toolName: msg.name,
+              toolParams: msg.params,
+              completed: false,
+            });
+            next.set(msg.sessionId, blocks);
             return next;
           });
           break;
@@ -540,6 +588,16 @@ export const App: React.FC = () => {
             next.delete(msg.sessionId);
             return next;
           });
+          // Mark stream blocks as completed and clear on next run
+          setStreamBlocksBySession((prev) => {
+            const next = new Map(prev);
+            const blocks = next.get(msg.sessionId);
+            if (blocks) {
+              const updated = blocks.map((b) => ({ ...b, completed: true }));
+              next.set(msg.sessionId, updated);
+            }
+            return next;
+          });
           break;
         }
 
@@ -556,6 +614,23 @@ export const App: React.FC = () => {
             const inner = new Map(next.get(msg.sessionId) ?? []);
             inner.set(msg.id, { result: msg.result, truncated: msg.truncated, isError: msg.isError });
             next.set(msg.sessionId, inner);
+            return next;
+          });
+          // Update the matching tool_call block with result
+          setStreamBlocksBySession((prev) => {
+            const next = new Map(prev);
+            const blocks = [...(next.get(msg.sessionId) ?? [])];
+            const idx = blocks.findIndex((b) => b.type === 'tool_call' && b.id === msg.id);
+            if (idx >= 0) {
+              blocks[idx] = {
+                ...blocks[idx],
+                toolResult: msg.result,
+                toolTruncated: msg.truncated,
+                toolIsError: msg.isError,
+                completed: true,
+              };
+              next.set(msg.sessionId, blocks);
+            }
             return next;
           });
           break;
@@ -578,6 +653,11 @@ export const App: React.FC = () => {
             return next;
           });
           setLiveToolResultsBySession((prev) => {
+            const next = new Map(prev);
+            next.delete(msg.sessionId);
+            return next;
+          });
+          setStreamBlocksBySession((prev) => {
             const next = new Map(prev);
             next.delete(msg.sessionId);
             return next;
@@ -846,6 +926,7 @@ export const App: React.FC = () => {
           queuedCount={queuedTexts.length}
           queuedTexts={queuedTexts}
           liveToolCalls={liveToolCalls}
+          streamBlocks={streamBlocks}
           onAbort={handleAbort}
           onCancelQueued={handleCancelQueued}
         />
