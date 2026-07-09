@@ -1,17 +1,20 @@
 export interface UserMessage {
   type: 'userMessage';
   text: string;
+  sessionId: string;
   attachments?: string[];
 }
 
 export interface AssistantStreamChunk {
   type: 'assistantStreamChunk';
   text: string;
+  sessionId: string;
 }
 
 export interface ToolCallStart {
   type: 'toolCallStart';
   id: string;
+  sessionId: string;
   name: string;
   params: Record<string, unknown>;
 }
@@ -27,11 +30,13 @@ export interface AgentError {
   type: 'error';
   message: string;
   retryable: boolean;
+  sessionId?: string;
 }
 
 export interface AgentDone {
   type: 'done';
   turnId: string;
+  sessionId: string;
 }
 
 export interface SessionsList {
@@ -60,7 +65,7 @@ export interface PrefillPrompt {
 }
 
 export type HostToWebview = AssistantStreamChunk | ToolCallStart | ToolCallResult | AgentError | AgentDone | SessionsList | SessionMessages | PrefillPrompt | AgentStatus;
-export type WebviewToHost = UserMessage | { type: 'cancelRequest' } | { type: 'runCommand'; command: string } | { type: 'switchSession'; sessionId: string } | { type: 'newSession' } | { type: 'deleteSession'; sessionId: string } | { type: 'switchModel'; model: string } | { type: 'setCwd'; cwd: string };
+export type WebviewToHost = UserMessage | { type: 'cancelRequest' } | { type: 'runCommand'; command: string } | { type: 'switchSession'; sessionId: string } | { type: 'newSession' } | { type: 'deleteSession'; sessionId: string } | { type: 'switchModel'; model: string } | { type: 'setCwd'; cwd: string } | { type: 'clearSession'; sessionId: string };
 
 export interface Message {
   id: string;
@@ -83,4 +88,5 @@ export interface SessionInfo {
   name: string;
   messageCount: number;
   createdAt: number;
+  updatedAt: number;
 }

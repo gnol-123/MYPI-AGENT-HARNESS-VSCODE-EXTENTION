@@ -2,20 +2,7 @@ import * as vscode from 'vscode';
 import { AgentLoop } from '../agent/loop';
 import { LLMEvent } from '../providers/types';
 import { setBashCwd } from '../tools/bash';
-
-interface StoredSession {
-  id: string;
-  name: string;
-  messages: Array<{ id: string; role: 'user' | 'assistant'; content: string; timestamp: number }>;
-  createdAt: number;
-}
-
-interface SessionInfo {
-  id: string;
-  name: string;
-  messageCount: number;
-  createdAt: number;
-}
+import { SessionManager, Session } from './session-manager';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   public static currentProvider: ChatViewProvider | undefined;
@@ -23,20 +10,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private agentLoop: AgentLoop | undefined;
   private extensionUri: vscode.Uri;
   private pendingPrompt: string | undefined;
-  private sessions: Map<string, StoredSession> = new Map();
-  private activeSessionId: string;
-  private globalState: vscode.Memento | undefined;
+  private sessionManager = new SessionManager();
+  private busySessions = new Set<string>();
   public onSwitchModel: ((model: string) => void) | undefined;
   public onRequestAgentLoop: (() => Promise<AgentLoop | undefined>) | undefined;
 
   constructor(extensionUri: vscode.Uri) {
     this.extensionUri = extensionUri;
-    this.activeSessionId = this.generateId();
   }
 
   setState(state: vscode.Memento): void {
-    this.globalState = state;
-    this.loadSessions();
+    this.sessionManager = new SessionManager(state);
+    this.sessionManager.load();
   }
 
   setAgentLoop(agentLoop: AgentLoop): void {
@@ -94,71 +79,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.view?.webview.postMessage(message);
   }
 
-  private generateId(): string {
-    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  }
-
-  private loadSessions(): void {
-    if (!this.globalState) return;
-    const stored = this.globalState.get<Record<string, StoredSession>>('mypi-sessions');
-    if (stored) {
-      this.sessions = new Map(Object.entries(stored));
-      const keys = Array.from(this.sessions.keys());
-      if (keys.length > 0) {
-        this.activeSessionId = keys[keys.length - 1];
-      }
-    } else {
-      // Create default session
-      this.createSession('Chat 1');
-    }
-  }
-
-  private saveSessions(): void {
-    if (!this.globalState) return;
-    const obj: Record<string, StoredSession> = {};
-    for (const [k, v] of this.sessions) {
-      obj[k] = v;
-    }
-    this.globalState.update('mypi-sessions', obj);
-  }
-
-  private createSession(name: string): string {
-    const id = this.generateId();
-    this.sessions.set(id, {
-      id,
-      name,
-      messages: [],
-      createdAt: Date.now(),
-    });
-    this.activeSessionId = id;
-    this.saveSessions();
-    this.sendSessionsList();
-    return id;
-  }
-
-  private deleteSession(id: string): void {
-    if (this.sessions.size <= 1) return; // Keep at least one
-    this.sessions.delete(id);
-    if (this.activeSessionId === id) {
-      const keys = Array.from(this.sessions.keys());
-      this.activeSessionId = keys[keys.length - 1];
-    }
-    this.saveSessions();
-    this.sendSessionsList();
-    this.sendSessionMessages(this.activeSessionId);
-  }
-
-  private getActiveSession(): StoredSession {
-    if (!this.sessions.has(this.activeSessionId)) {
-      this.createSession('Chat 1');
-    }
-    return this.sessions.get(this.activeSessionId)!;
-  }
-
   private sendStatus(): void {
     if (this.agentLoop) {
       const status = this.agentLoop.getStatus();
-      // Shorten cwd for display
       const home = process.env.HOME || process.env.USERPROFILE || '';
       if (home && status.cwd.startsWith(home)) {
         status.cwd = '~' + status.cwd.slice(home.length);
@@ -168,22 +91,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   private sendSessionsList(): void {
-    const infos: SessionInfo[] = Array.from(this.sessions.values()).map((s) => ({
-      id: s.id,
-      name: s.name,
-      messageCount: s.messages.length,
-      createdAt: s.createdAt,
-    }));
     this.postMessage({
       type: 'sessionsList',
-      sessions: infos,
-      activeId: this.activeSessionId,
+      sessions: this.sessionManager.list(),
+      activeId: this.sessionManager.activeId,
     });
-    this.sendSessionMessages(this.activeSessionId);
+    this.sendSessionMessages(this.sessionManager.activeId);
   }
 
   private sendSessionMessages(sessionId: string): void {
-    const session = this.sessions.get(sessionId);
+    const session = this.sessionManager.get(sessionId);
     if (!session) return;
     this.postMessage({
       type: 'sessionMessages',
@@ -192,19 +109,63 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  private addMessageToSession(role: 'user' | 'assistant', content: string): void {
-    const session = this.getActiveSession();
-    session.messages.push({
-      id: this.generateId(),
-      role,
-      content,
-      timestamp: Date.now(),
-    });
-    // Update session name from first user message
-    if (role === 'user' && session.messages.filter((m) => m.role === 'user').length === 1) {
-      session.name = content.slice(0, 30) + (content.length > 30 ? '...' : '');
+  private async runInSession(session: Session, text: string): Promise<void> {
+    this.busySessions.add(session.id);
+    this.sessionManager.addMessage(session.id, 'user', text);
+    this.sendSessionsList();
+
+    let fullResponse = '';
+
+    try {
+      await this.agentLoop!.run(session.history, text, (event: LLMEvent) => {
+        switch (event.type) {
+          case 'text':
+            fullResponse += event.text;
+            this.postMessage({
+              type: 'assistantStreamChunk',
+              text: event.text,
+              sessionId: session.id,
+            });
+            break;
+          case 'tool_use':
+            this.postMessage({
+              type: 'toolCallStart',
+              id: event.id,
+              name: event.name,
+              params: event.input,
+              sessionId: session.id,
+            });
+            break;
+          case 'error':
+            fullResponse += `\nError: ${event.message}`;
+            this.postMessage({
+              type: 'error',
+              message: event.message,
+              retryable: true,
+              sessionId: session.id,
+            });
+            break;
+          case 'done':
+            break;
+        }
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      fullResponse += `\nError: ${msg}`;
+      this.postMessage({ type: 'error', message: msg, retryable: true, sessionId: session.id });
+    } finally {
+      this.busySessions.delete(session.id);
     }
-    this.saveSessions();
+
+    if (fullResponse) {
+      this.sessionManager.addMessage(session.id, 'assistant', fullResponse);
+    }
+    this.postMessage({
+      type: 'done',
+      turnId: Date.now().toString(),
+      sessionId: session.id,
+    });
+    this.sendStatus();
     this.sendSessionsList();
   }
 
@@ -217,24 +178,29 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
 
       case 'newSession': {
-        const count = this.sessions.size + 1;
-        this.createSession(`Chat ${count}`);
-        this.sendSessionMessages(this.activeSessionId);
+        this.sessionManager.create();
+        this.sendSessionsList();
         break;
       }
 
       case 'switchSession': {
         const sessionId = message.sessionId as string;
-        if (this.sessions.has(sessionId)) {
-          this.activeSessionId = sessionId;
-          this.sendSessionsList();
-        }
+        this.sessionManager.setActive(sessionId);
+        this.sendSessionsList();
         break;
       }
 
       case 'deleteSession': {
         const sessionId = message.sessionId as string;
-        this.deleteSession(sessionId);
+        this.sessionManager.delete(sessionId);
+        this.sendSessionsList();
+        break;
+      }
+
+      case 'clearSession': {
+        const sessionId = message.sessionId as string;
+        this.sessionManager.clear(sessionId);
+        this.sendSessionsList();
         break;
       }
 
@@ -255,6 +221,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
       case 'userMessage': {
         const text = message.text as string;
+        // Pin to the origin session NOW — activeId may change mid-run.
+        const sessionId = (message.sessionId as string) || this.sessionManager.activeId;
+        const session = this.sessionManager.get(sessionId);
+        if (!session) return;
+
+        if (this.busySessions.has(session.id)) {
+          this.postMessage({
+            type: 'error',
+            message: 'Still working on the previous message in this chat — give it a moment.',
+            retryable: false,
+            sessionId: session.id,
+          });
+          this.sendSessionsList();
+          return;
+        }
+
         if (!this.agentLoop && this.onRequestAgentLoop) {
           await this.onRequestAgentLoop();
         }
@@ -263,52 +245,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             type: 'error',
             message: 'No API key configured. Run "MYPI-by-SL: Set API Key" from the command palette (Ctrl+Shift+P).',
             retryable: false,
+            sessionId: session.id,
           });
           return;
         }
 
-        this.addMessageToSession('user', text);
-
-        this.postMessage({
-          type: 'userMessageEcho',
-          text,
-          id: Date.now().toString(),
-        });
-
-        let fullResponse = '';
-
-        await this.agentLoop.run(text, (event: LLMEvent) => {
-          switch (event.type) {
-            case 'text':
-              fullResponse += event.text;
-              this.postMessage({ type: 'assistantStreamChunk', text: event.text });
-              break;
-            case 'tool_use':
-              this.postMessage({
-                type: 'toolCallStart',
-                id: event.id,
-                name: event.name,
-                params: event.input,
-              });
-              break;
-            case 'error':
-              fullResponse += `\nError: ${event.message}`;
-              this.postMessage({
-                type: 'error',
-                message: event.message,
-                retryable: true,
-              });
-              break;
-            case 'done':
-              this.postMessage({ type: 'done', turnId: Date.now().toString() });
-              this.sendStatus();
-              break;
-          }
-        });
-
-        if (fullResponse) {
-          this.addMessageToSession('assistant', fullResponse);
-        }
+        await this.runInSession(session, text);
         break;
       }
     }
