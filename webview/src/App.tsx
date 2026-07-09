@@ -781,6 +781,11 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Tell backend we're ready to receive messages (fixes race condition on reload)
+  useEffect(() => {
+    vscodeApi.postMessage({ type: 'webviewReady' });
+  }, []);
+
   const getDotColor = (state: AgentDotState): string => {
     switch (state) {
       case 'working': return '#f9e2af';

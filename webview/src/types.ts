@@ -132,7 +132,7 @@ export type HostToWebview = AssistantStreamChunk | ToolCallStart | ToolCallResul
   | NetworkReconnectedMsg
   | QueueStatusMsg
   | ThinkingEffortMsg;
-export type WebviewToHost = UserMessage | { type: 'cancelRequest'; sessionId: string } | { type: 'runCommand'; command: string } | { type: 'switchSession'; sessionId: string } | { type: 'newSession' } | { type: 'deleteSession'; sessionId: string } | { type: 'switchModel'; model: string } | { type: 'setCwd'; cwd: string } | { type: 'clearSession'; sessionId: string } | { type: 'retryPrompt'; sessionId: string; text: string } | { type: 'setThinkingEffort'; effort: 'low' | 'medium' | 'high' };
+export type WebviewToHost = UserMessage | { type: 'cancelRequest'; sessionId: string } | { type: 'runCommand'; command: string } | { type: 'switchSession'; sessionId: string } | { type: 'newSession' } | { type: 'deleteSession'; sessionId: string } | { type: 'switchModel'; model: string } | { type: 'setCwd'; cwd: string } | { type: 'clearSession'; sessionId: string } | { type: 'retryPrompt'; sessionId: string; text: string } | { type: 'setThinkingEffort'; effort: 'low' | 'medium' | 'high' } | { type: 'webviewReady' };
 
 export interface Message {
   id: string;

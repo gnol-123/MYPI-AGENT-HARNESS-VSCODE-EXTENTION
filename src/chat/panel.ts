@@ -73,24 +73,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage((message) => {
       this.handleMessage(message);
     });
-
-    // Send sessions list after a short delay to let webview initialize
-    setTimeout(() => this.sendSessionsList(), 100);
-
-    if (this.pendingPrompt) {
-      setTimeout(() => {
-        this.postMessage({ type: 'prefillPrompt', text: this.pendingPrompt! });
-        this.pendingPrompt = undefined;
-      }, 200);
-    } else if (!this.agentLoop) {
-      setTimeout(() => {
-        this.postMessage({
-          type: 'error',
-          message: 'Welcome to MYPI-by-SL! Run "MYPI-by-SL: Set API Key" from the command palette (Ctrl+Shift+P).',
-          retryable: false,
-        });
-      }, 500);
-    }
   }
 
   static postToWebview(message: Record<string, unknown>): void {
@@ -262,6 +244,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   private async handleMessage(message: Record<string, unknown>): Promise<void> {
     switch (message.type) {
+      case 'webviewReady': {
+        // Webview is fully initialized — send all session data now
+        this.sendSessionsList();
+        this.sendStatus();
+        if (this.pendingPrompt) {
+          this.postMessage({ type: 'prefillPrompt', text: this.pendingPrompt });
+          this.pendingPrompt = undefined;
+        } else if (!this.agentLoop) {
+          this.postMessage({
+            type: 'error',
+            message: 'Welcome to MYPI-by-SL! Run "MYPI-by-SL: Set API Key" from the command palette (Ctrl+Shift+P).',
+            retryable: false,
+          });
+        }
+        break;
+      }
+
       case 'runCommand': {
         const cmd = message.command as string;
         vscode.commands.executeCommand(cmd);
