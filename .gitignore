@@ -1,6 +1,48 @@
-.worktrees/
+# Build outputs
 node_modules/
 out/
-*.vsix
 webview/out/
+versions/
+
+# VSIX files
+*.vsix
+
+# Local configuration
+.env
+.env.local
+.env.*.local
+*.env
+
+# API keys and secrets
+*-key.txt
+*-key.json
+api-key.txt
+secrets.json
+credentials.json
+*.key
+*.pem
+
+# Local PI agent (used only in development)
+.pi/
+~/.pi/
+
+# IDE and editor files
 .lavish/
+.vscode/settings.local.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+test-*.mjs
+.superpowers/
+
+# Temporary files
+*.log
+*.tmp
+.cache/
