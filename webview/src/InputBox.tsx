@@ -30,6 +30,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
 interface InputBoxProps {
   onSend: (text: string) => void;
   disabled: boolean;
+  isRunning?: boolean;
   availableModels: string[];
   currentModel: string;
   onSwitchModel: (model: string) => void;
@@ -145,7 +146,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableModels, currentModel, onSwitchModel, onSetCwd, onNewSession, onShowHistory, onClearSession, onShowHelp }) => {
+export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, isRunning, availableModels, currentModel, onSwitchModel, onSetCwd, onNewSession, onShowHistory, onClearSession, onShowHelp }) => {
   const [text, setText] = useState('');
   const [showCommands, setShowCommands] = useState(false);
   const [filteredCommands, setFilteredCommands] = useState<SlashCommand[]>([]);
@@ -216,7 +217,7 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableM
 
   const handleSend = () => {
     const trimmed = text.trim();
-    if (!trimmed || disabled) return;
+    if (!trimmed) return;
 
     // Handle /cd command locally
     if (trimmed.startsWith('/cd ')) {
@@ -393,8 +394,8 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableM
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           onInput={handleInput}
-          placeholder='Ask anything... (type / for commands)'
-          disabled={disabled}
+          placeholder={isRunning ? 'Queue another prompt... (type / for commands)' : 'Ask anything... (type / for commands)'}
+          disabled={false}
           rows={1}
         />
         <button
@@ -404,12 +405,12 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableM
             ...(disabled ? styles.sendButtonDisabled : {}),
           }}
           onClick={handleSend}
-          disabled={disabled}
+          disabled={false}
         >
-          Send
+          {isRunning ? 'Queue' : 'Send'}
         </button>
       </div>
-      <div style={styles.hint}>Enter to send · / for commands · Shift+Enter for newline</div>
+      <div style={styles.hint}>{isRunning ? 'Queue to send after current run' : 'Enter to send'} · / for commands · Shift+Enter for newline</div>
     </div>
   );
 };

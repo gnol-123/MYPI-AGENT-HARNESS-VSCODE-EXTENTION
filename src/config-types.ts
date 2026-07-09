@@ -88,7 +88,7 @@ const DEFAULT_CONFIG: SLSConfig = {
   maxTokens: 8192,
   toolTimeout: 120,
   skillsPath: '',
-  thinkingLevel: 'off',
+  thinkingLevel: 'low',
 };
 
 export function buildConfig(raw: Record<string, unknown>): SLSConfig {

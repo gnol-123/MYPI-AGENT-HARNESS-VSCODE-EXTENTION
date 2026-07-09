@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ChatView } from './ChatView';
 import { InputBox } from './InputBox';
-import { Message, HostToWebview, SessionInfo, SessionUsage } from './types';
+import { Message, HostToWebview, SessionInfo, SessionUsage, AgentDotState } from './types';
 
 const vscodeApi = acquireVsCodeApi();
 
@@ -280,11 +280,22 @@ export const App: React.FC = () => {
   const [showHelp, setShowHelp] = useState(false);
   const [agentStatus, setAgentStatus] = useState({ cwd: '', model: '', provider: '', tokenUsage: { inputTokens: 0, outputTokens: 0 }, availableModels: [] as string[] });
 
+  // New state: status dot, queues, network errors
+  const [dotStateBySession, setDotStateBySession] = useState<Map<string, AgentDotState>>(new Map());
+  const [queuedBySession, setQueuedBySession] = useState<Map<string, string[]>>(new Map());
+  const [networkErrorBySession, setNetworkErrorBySession] = useState<Map<string, string>>(new Map());
+  const [thinkingEffort, setThinkingEffort] = useState<'low' | 'medium' | 'high'>('medium');
+  const [runningSessions, setRunningSessions] = useState<Set<string>>(new Set());
+
   const streamingText = streamingBySession.get(activeSessionId) ?? '';
   const isLoading = streamingBySession.has(activeSessionId);
   const isThinking = thinkingSessions.has(activeSessionId);
   const thinkingText = thinkingBySession.get(activeSessionId) ?? '';
   const activeUsage = usageBySession.get(activeSessionId);
+  const dotState = dotStateBySession.get(activeSessionId) ?? 'idle';
+  const isRunning = runningSessions.has(activeSessionId);
+  const queuedTexts = queuedBySession.get(activeSessionId) ?? [];
+  const networkError = networkErrorBySession.get(activeSessionId) ?? '';
 
   const sendMessage = useCallback((text: string) => {
     const userMsg: Message = {
@@ -298,9 +309,57 @@ export const App: React.FC = () => {
     setThinkingBySession((prev) => new Map(prev).set(activeSessionId, ''));
     setToolCallsBySession((prev) => new Map(prev).set(activeSessionId, new Map()));
     setNeedsApiKey(false);
+    setNetworkErrorBySession((prev) => {
+      const next = new Map(prev);
+      next.delete(activeSessionId);
+      return next;
+    });
+    setRunningSessions((prev) => new Set(prev).add(activeSessionId));
+    setDotStateBySession((prev) => new Map(prev).set(activeSessionId, 'working'));
 
     vscodeApi.postMessage({ type: 'userMessage', text, sessionId: activeSessionId });
   }, [activeSessionId]);
+
+  const handleAbort = useCallback(() => {
+    vscodeApi.postMessage({ type: 'cancelRequest', sessionId: activeSessionId });
+    setRunningSessions((prev) => {
+      const next = new Set(prev);
+      next.delete(activeSessionId);
+      return next;
+    });
+    setQueuedBySession((prev) => {
+      const next = new Map(prev);
+      next.delete(activeSessionId);
+      return next;
+    });
+  }, [activeSessionId]);
+
+  const handleCancelQueued = useCallback((index: number) => {
+    setQueuedBySession((prev) => {
+      const next = new Map(prev);
+      const q = [...(next.get(activeSessionId) ?? [])];
+      q.splice(index, 1);
+      if (q.length === 0) next.delete(activeSessionId);
+      else next.set(activeSessionId, q);
+      return next;
+    });
+  }, [activeSessionId]);
+
+  const handleRetry = useCallback((text: string) => {
+    setNetworkErrorBySession((prev) => {
+      const next = new Map(prev);
+      next.delete(activeSessionId);
+      return next;
+    });
+    setRunningSessions((prev) => new Set(prev).add(activeSessionId));
+    setDotStateBySession((prev) => new Map(prev).set(activeSessionId, 'working'));
+    vscodeApi.postMessage({ type: 'retryPrompt', sessionId: activeSessionId, text });
+  }, [activeSessionId]);
+
+  const handleThinkingEffort = useCallback((effort: 'low' | 'medium' | 'high') => {
+    setThinkingEffort(effort);
+    vscodeApi.postMessage({ type: 'setThinkingEffort', effort });
+  }, []);
 
   const openCommandPalette = useCallback(() => {
     vscodeApi.postMessage({ type: 'runCommand', command: 'mypi-by-sl.setApiKey' });
@@ -429,8 +488,61 @@ export const App: React.FC = () => {
             next.delete(msg.sessionId);
             return next;
           });
+          setRunningSessions((prev) => {
+            const next = new Set(prev);
+            next.delete(msg.sessionId);
+            return next;
+          });
           break;
         }
+
+        case 'statusDot':
+          setDotStateBySession((prev) => new Map(prev).set(msg.sessionId, msg.state));
+          break;
+
+        case 'abortConfirm':
+          setRunningSessions((prev) => {
+            const next = new Set(prev);
+            next.delete(msg.sessionId);
+            return next;
+          });
+          setDotStateBySession((prev) => new Map(prev).set(msg.sessionId, 'failed'));
+          break;
+
+        case 'networkError':
+          setNetworkErrorBySession((prev) => new Map(prev).set(msg.sessionId, msg.message));
+          setRunningSessions((prev) => {
+            const next = new Set(prev);
+            next.delete(msg.sessionId);
+            return next;
+          });
+          setDotStateBySession((prev) => new Map(prev).set(msg.sessionId, 'failed'));
+          break;
+
+        case 'networkReconnected':
+          setNetworkErrorBySession((prev) => {
+            const next = new Map(prev);
+            next.delete(msg.sessionId);
+            return next;
+          });
+          break;
+
+        case 'queueStatus':
+          setQueuedBySession((prev) => {
+            const next = new Map(prev);
+            if (msg.count > 0) {
+              // Keep existing queue if count matches, otherwise the backend manages it
+              next.set(msg.sessionId, next.get(msg.sessionId) ?? []);
+            } else {
+              next.delete(msg.sessionId);
+            }
+            return next;
+          });
+          break;
+
+        case 'thinkingEffort':
+          setThinkingEffort(msg.effort);
+          break;
 
         case 'error': {
           if (msg.message.includes('API key') || msg.message.includes('Set API Key')) {
@@ -513,10 +625,49 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  const getDotColor = (state: AgentDotState): string => {
+    switch (state) {
+      case 'working': return '#f9e2af';
+      case 'found': return '#a6e3a1';
+      case 'done': return '#a6e3a1';
+      case 'failed': return '#f38ba8';
+      default: return '#6c7086';
+    }
+  };
+
+  const getDotAnimation = (state: AgentDotState): string => {
+    switch (state) {
+      case 'working': return 'statusWorking 1.2s ease-in-out infinite';
+      case 'found': return 'statusFound 0.35s ease-in-out infinite';
+      case 'done':
+      case 'failed':
+      case 'idle':
+      default: return 'none';
+    }
+  };
+
   return (
     <div style={styles.container}>
+      <style>{`
+        @keyframes statusWorking { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+        @keyframes statusFound { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.15; transform: scale(0.6); } }
+        .mypi-msg-user.active-bubble { outline: 1px solid rgba(137,180,250,0.4); outline-offset: 2px; position: relative; }
+        .abort-btn { position: absolute; top: -8px; right: -8px; animation: fadeSlideIn 0.2s ease-out; }
+        @keyframes fadeSlideIn { from { opacity: 0; transform: translateX(4px); } to { opacity: 1; transform: translateX(0); } }
+      `}</style>
       <div style={styles.header}>
-        <span>MYPI-by-SL</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span>MYPI-by-SL</span>
+          <span
+            style={{
+              width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0,
+              background: getDotColor(dotState),
+              animation: getDotAnimation(dotState),
+              opacity: dotState === 'idle' ? 0.5 : 1,
+            }}
+            title={`Status: ${dotState}`}
+          />
+        </span>
         <div style={styles.headerActions}>
           <button style={styles.headerBtn} onClick={() => { setShowHelp(false); setShowHistory((v) => !v); }} title="Session history (/resume)">⟲</button>
           <button style={styles.headerBtn} onClick={newSession} title="New session (/new)">+</button>
@@ -560,6 +711,47 @@ export const App: React.FC = () => {
             </button>
           </div>
         )}
+        {networkError && (
+          <div style={{
+            margin: '8px 12px', padding: '10px 12px',
+            background: 'rgba(243,139,168,0.08)',
+            border: '1px solid rgba(243,139,168,0.3)',
+            borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px',
+            fontSize: '11px', animation: 'shake 0.5s ease-out',
+          }}>
+            <span style={{ fontSize: '16px', flexShrink: 0 }}>⚠</span>
+            <div style={{ flex: 1, minWidth: 0, lineHeight: '1.45' }}>
+              <strong style={{ color: '#f38ba8', display: 'block', marginBottom: '1px' }}>Network disconnected</strong>
+              <span style={{ color: 'var(--vscode-descriptionForeground)' }}>{networkError}</span>
+            </div>
+            <button
+              style={{
+                background: '#f38ba8', color: '#fff', border: 'none',
+                borderRadius: '5px', padding: '4px 12px', fontSize: '11px',
+                fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+              }}
+              onClick={() => handleRetry(messages[messages.length - 1]?.content ?? '')}
+            >Retry</button>
+          </div>
+        )}
+
+        <div style={{ padding: '3px 12px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '10px', borderBottom: '1px solid var(--vscode-sideBarSectionHeader-border)', color: 'var(--vscode-descriptionForeground)' }}>
+          <span>Effort:</span>
+          {(['low', 'medium', 'high'] as const).map((e) => (
+            <button
+              key={e}
+              onClick={() => handleThinkingEffort(e)}
+              style={{
+                background: thinkingEffort === e ? 'var(--vscode-button-background)' : 'transparent',
+                color: thinkingEffort === e ? 'var(--vscode-button-foreground)' : 'var(--vscode-descriptionForeground)',
+                border: '1px solid var(--vscode-input-border)',
+                borderRadius: '3px', padding: '1px 8px',
+                fontSize: '10px', cursor: 'pointer', fontWeight: thinkingEffort === e ? 600 : 400,
+              }}
+            >{e}</button>
+          ))}
+        </div>
+
         <ChatView
           messages={messages}
           streamingText={streamingText}
@@ -567,6 +759,11 @@ export const App: React.FC = () => {
           waiting={isLoading && !streamingText}
           thinking={isThinking}
           thinkingText={thinkingText}
+          isRunning={isRunning}
+          queuedCount={queuedTexts.length}
+          queuedTexts={queuedTexts}
+          onAbort={handleAbort}
+          onCancelQueued={handleCancelQueued}
         />
 
         {showHistory && (
@@ -627,7 +824,8 @@ export const App: React.FC = () => {
 
         <InputBox
           onSend={sendMessage}
-          disabled={isLoading}
+          disabled={false}
+          isRunning={isRunning}
           availableModels={agentStatus.availableModels}
           currentModel={agentStatus.model}
           onSwitchModel={switchModel}

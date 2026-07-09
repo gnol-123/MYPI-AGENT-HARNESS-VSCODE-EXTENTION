@@ -5,12 +5,17 @@ interface AnthropicConfig {
   apiKey: string;
   model: string;
   thinkingLevel?: 'off' | 'low' | 'medium' | 'high';
+  /** Request timeout in ms (default 120s). */
+  timeoutMs?: number;
 }
 
 const THINKING_BUDGETS = { low: 2048, medium: 4096, high: 8192 } as const;
 
 export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
-  const client = new Anthropic({ apiKey: config.apiKey });
+  const client = new Anthropic({
+    apiKey: config.apiKey,
+    timeout: config.timeoutMs ?? 120_000,
+  });
 
   return {
     async *streamChat(
@@ -50,9 +55,10 @@ export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
           ? { type: 'enabled' as const, budget_tokens: THINKING_BUDGETS[level] }
           : undefined;
 
+        let droppedThinking = false;
+
         const stream = client.messages.stream({
           model: config.model,
-          // Anthropic requires max_tokens to exceed the thinking budget.
           max_tokens: thinking ? Math.max(maxTokens, thinking.budget_tokens + 4096) : maxTokens,
           ...(thinking ? { thinking } : {}),
           system: systemPrompt,
@@ -68,8 +74,15 @@ export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
           if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
             yield { type: 'text', text: event.delta.text };
           } else if (event.type === 'content_block_delta' && (event.delta as any).type === 'thinking_delta') {
+            droppedThinking = false;
             yield { type: 'thinking', text: (event.delta as any).thinking ?? '' };
+          } else if (event.type === 'content_block_delta' && (event.delta as any).type === 'redacted_thinking') {
+            droppedThinking = true;
           }
+        }
+
+        if (droppedThinking) {
+          yield { type: 'text', text: '\n*(reasoning was redacted by the API)*\n' };
         }
 
         const finalMessage = await stream.finalMessage();
@@ -89,9 +102,20 @@ export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
         }
 
         yield { type: 'done' };
-      } catch (err) {
+      } catch (err: any) {
+        const status = err?.status ?? err?.statusCode;
         const message = err instanceof Error ? err.message : String(err);
-        yield { type: 'error', message };
+        if (status === 401 || status === 403) {
+          yield { type: 'error', message: `Authentication failed (${status}). Check your Anthropic API key.` };
+        } else if (status === 429) {
+          yield { type: 'error', message: 'Rate limited by Anthropic. Wait a moment and try again.' };
+        } else if (message.includes('connect') || message.includes('fetch') || message.includes('ENOTFOUND') || message.includes('ECONNREFUSED')) {
+          yield { type: 'error', message: `Network error: cannot reach Anthropic API. Check your connection.\n\n${message}` };
+        } else if (message.includes('timeout') || message.includes('timed out')) {
+          yield { type: 'error', message: 'Request timed out. The model may be thinking too long -- try lowering your thinking level or sending a shorter prompt.' };
+        } else {
+          yield { type: 'error', message: `Anthropic API error:\n\n${message}` };
+        }
       }
     },
   };

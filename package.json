@@ -14,7 +14,8 @@
     "onCommand:mypi-by-sl.explainFile",
     "onCommand:mypi-by-sl.explainSelection",
     "onCommand:mypi-by-sl.fixSelection",
-    "onCommand:mypi-by-sl.refactorSelection"
+    "onCommand:mypi-by-sl.refactorSelection",
+    "onCommand:mypi-by-sl.selfTest"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -42,6 +43,10 @@
       {
         "command": "mypi-by-sl.refactorSelection",
         "title": "MYPI-by-SL: Refactor selection"
+      },
+      {
+        "command": "mypi-by-sl.selfTest",
+        "title": "MYPI-by-SL: Self Test"
       }
     ],
     "viewsContainers": {

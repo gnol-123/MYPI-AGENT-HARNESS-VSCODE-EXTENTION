@@ -7,6 +7,8 @@ interface OpenAICompatConfig {
   /** Provider key ('z-ai', 'deepseek', ...) — reasoning params differ per API. */
   providerKey?: string;
   thinkingLevel?: 'off' | 'low' | 'medium' | 'high';
+  /** Request timeout in ms (default 120s). */
+  timeoutMs?: number;
 }
 
 function convertMessages(messages: Message[]): Array<Record<string, unknown>> {
@@ -88,7 +90,6 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
           ],
           max_tokens: maxTokens,
           stream: true,
-          stream_options: { include_usage: true },
         };
 
         // Reasoning control, mirroring PI's defaultThinkingLevel.
@@ -103,6 +104,8 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
         }
 
         const baseUrl = config.baseUrl.replace(/\/$/, '');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs ?? 120_000);
         const response = await fetch(`${baseUrl}/chat/completions`, {
           method: 'POST',
           headers: {
@@ -110,7 +113,8 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
             Authorization: `Bearer ${config.apiKey}`,
           },
           body: JSON.stringify(body),
-        });
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timeoutId));
 
         if (!response.ok) {
           let errorText = await response.text();
@@ -150,6 +154,8 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
 
             try {
               const parsed = JSON.parse(data);
+              // Z.AI wraps chunks in { data: { ... } }; standard OpenAI-compat sends { choices: [...] }
+              const choices: any[] = parsed.choices ?? parsed.data?.choices ?? [];
               if (parsed.usage) {
                 yield {
                   type: 'usage',
@@ -157,7 +163,7 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
                   outputTokens: parsed.usage.completion_tokens ?? 0,
                 };
               }
-              const choice = parsed.choices?.[0];
+              const choice = choices[0];
               if (!choice) continue;
 
               const delta = choice.delta;
@@ -198,9 +204,15 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
         }
 
         yield { type: 'done' };
-      } catch (err) {
+      } catch (err: any) {
         const message = err instanceof Error ? err.message : String(err);
-        yield { type: 'error', message };
+        if (err?.name === 'AbortError' || message.includes('abort') || message.includes('timeout')) {
+          yield { type: 'error', message: 'Request timed out. The model may be thinking too long -- try lowering your thinking level or sending a shorter prompt.' };
+        } else if (message.includes('fetch') || message.includes('ENOTFOUND') || message.includes('ECONNREFUSED') || message.includes('Failed to fetch')) {
+          yield { type: 'error', message: `Network error: cannot reach ${config.baseUrl}. Check your connection and the provider endpoint URL.\n\n${message}` };
+        } else {
+          yield { type: 'error', message: `API error: ${message}` };
+        }
       }
     },
   };

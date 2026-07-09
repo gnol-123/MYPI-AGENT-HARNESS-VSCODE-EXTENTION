@@ -6,6 +6,8 @@ import { buildSystemPrompt } from './system-prompt';
 import { setBashCwd, getBashCwd } from '../tools/bash';
 
 const MAX_TOOL_ITERATIONS = 25;
+const MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 1000;
 
 export interface TokenUsage {
   inputTokens: number;
@@ -23,6 +25,7 @@ export interface AgentStatus {
 
 export class AgentLoop {
   private tokenUsage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+  private abortController: AbortController | undefined;
 
   constructor(
     private provider: LLMProvider,
@@ -33,6 +36,7 @@ export class AgentLoop {
     private providerName: string = '',
     private providerKey: string = '',
     private availableModels: string[] = [],
+    private thinkingEffort: 'low' | 'medium' | 'high' = 'medium',
   ) {}
 
   getStatus(): AgentStatus {
@@ -47,83 +51,154 @@ export class AgentLoop {
     };
   }
 
+  setThinkingEffort(effort: 'low' | 'medium' | 'high'): void {
+    this.thinkingEffort = effort;
+  }
+
+  abort(): void {
+    if (this.abortController) {
+      this.abortController.abort();
+    }
+  }
+
   async run(
     history: ConversationHistory,
     userMessage: string,
     onEvent: (event: LLMEvent) => void,
   ): Promise<void> {
+    this.abortController = new AbortController();
+    const signal = this.abortController.signal;
     history.addUserMessage(userMessage);
 
-    const systemPrompt = buildSystemPrompt(this.skills, userMessage);
+    const systemPrompt = buildSystemPrompt(this.skills, userMessage, this.thinkingEffort);
     const toolDefs = this.toolRegistry.getAllToolDefs();
     let iterations = 0;
+    let foundSolution = false;
 
-    while (iterations < MAX_TOOL_ITERATIONS) {
-      iterations++;
+    try {
+      while (iterations < MAX_TOOL_ITERATIONS) {
+        if (signal.aborted) break;
+        iterations++;
 
-      const toolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
-      let currentText = '';
+        const toolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
+        let currentText = '';
 
-      const stream = this.provider.streamChat(
-        history.getMessages(),
-        toolDefs,
-        systemPrompt,
-        this.maxTokens,
-      );
+        let stream: AsyncIterable<LLMEvent> | undefined;
+        let retries = 0;
 
-      for await (const event of stream) {
-        if (event.type === 'text') {
-          currentText += event.text;
-          onEvent(event);
-        } else if (event.type === 'thinking') {
-          onEvent(event);
-        } else if (event.type === 'usage') {
-          this.tokenUsage.inputTokens += event.inputTokens;
-          this.tokenUsage.outputTokens += event.outputTokens;
-          onEvent(event);
-        } else if (event.type === 'tool_use') {
-          toolCalls.push({ id: event.id, name: event.name, input: event.input });
-        } else if (event.type === 'error') {
-          onEvent(event);
-          return;
+        // Retry loop for network errors
+        while (true) {
+          try {
+            stream = this.provider.streamChat(
+              history.getMessages(),
+              toolDefs,
+              systemPrompt,
+              this.maxTokens,
+            );
+            break;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const isNetwork = msg.includes('fetch') || msg.includes('network') ||
+              msg.includes('ECONN') || msg.includes('ETIMEDOUT') ||
+              msg.includes('aborted') || msg.includes('429') ||
+              msg.includes('503') || msg.includes('502');
+
+            if (isNetwork && retries < MAX_RETRIES) {
+              retries++;
+              const delay = RETRY_BASE_DELAY_MS * Math.pow(2, retries - 1);
+              onEvent({ type: 'error', message: `Network error (retry ${retries}/${MAX_RETRIES} in ${delay / 1000}s)...` });
+              await new Promise((r) => setTimeout(r, delay));
+              if (signal.aborted) break;
+            } else {
+              throw err;
+            }
+          }
         }
-      }
 
-      // A thinking-only turn can produce no visible output; don't store an empty
-      // assistant message, it corrupts the next turn's context.
-      if (currentText || toolCalls.length > 0) {
-        history.addAssistantMessage(
-          currentText,
-          toolCalls.length > 0 ? toolCalls : undefined,
-        );
-      }
-
-      if (toolCalls.length === 0) {
-        return;
-      }
-
-      for (const tc of toolCalls) {
-        onEvent({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.input });
+        if (!stream) break;
 
         try {
-          const result = await this.toolRegistry.execute(tc.name, tc.input);
-          const resultText = result.error
-            ? `Error: ${result.error}`
-            : result.content;
+          for await (const event of stream) {
+            if (signal.aborted) break;
 
-          history.addToolResult(
-            tc.id,
-            resultText + (result.truncated ? '\n[Output truncated]' : ''),
-            !!result.error,
-          );
-        } catch (err) {
-          history.addToolResult(
-            tc.id,
-            `Error: ${err instanceof Error ? err.message : String(err)}`,
-            true,
+            if (event.type === 'text') {
+              currentText += event.text;
+              onEvent(event);
+            } else if (event.type === 'thinking') {
+              onEvent(event);
+            } else if (event.type === 'usage') {
+              this.tokenUsage.inputTokens += event.inputTokens;
+              this.tokenUsage.outputTokens += event.outputTokens;
+              onEvent(event);
+            } else if (event.type === 'tool_use') {
+              if (!foundSolution) {
+                foundSolution = true;
+                onEvent({ type: 'text', text: '__FOUND_SOLUTION__' });
+              }
+              toolCalls.push({ id: event.id, name: event.name, input: event.input });
+            } else if (event.type === 'error') {
+              onEvent(event);
+              return;
+            }
+          }
+        } catch (streamErr) {
+          const msg = streamErr instanceof Error ? streamErr.message : String(streamErr);
+          const isNetwork = msg.includes('fetch') || msg.includes('network') ||
+            msg.includes('ECONN') || msg.includes('ETIMEDOUT') ||
+            msg.includes('aborted') || msg.includes('429') ||
+            msg.includes('503') || msg.includes('502');
+
+          if (isNetwork && retries < MAX_RETRIES) {
+            retries++;
+            const delay = RETRY_BASE_DELAY_MS * Math.pow(2, retries - 1);
+            onEvent({ type: 'error', message: `Stream error (retry ${retries}/${MAX_RETRIES} in ${delay / 1000}s)...` });
+            await new Promise((r) => setTimeout(r, delay));
+            if (!signal.aborted) continue;
+            break;
+          }
+          throw streamErr;
+        }
+
+        // A thinking-only turn may produce no visible output text - the model
+        // spent its whole budget on reasoning. Don't store an empty message,
+        // but DO signal completion so the webview knows it's done.
+        if (currentText || toolCalls.length > 0) {
+          history.addAssistantMessage(
+            currentText,
+            toolCalls.length > 0 ? toolCalls : undefined,
           );
         }
+
+        if (toolCalls.length === 0) {
+          return;
+        }
+
+        for (const tc of toolCalls) {
+          if (signal.aborted) break;
+          onEvent({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.input });
+
+          try {
+            const result = await this.toolRegistry.execute(tc.name, tc.input);
+            const resultText = result.error
+              ? `Error: ${result.error}`
+              : result.content;
+
+            history.addToolResult(
+              tc.id,
+              resultText + (result.truncated ? '\n[Output truncated]' : ''),
+              !!result.error,
+            );
+          } catch (err) {
+            history.addToolResult(
+              tc.id,
+              `Error: ${err instanceof Error ? err.message : String(err)}`,
+              true,
+            );
+          }
+        }
       }
+    } finally {
+      this.abortController = undefined;
     }
   }
 }

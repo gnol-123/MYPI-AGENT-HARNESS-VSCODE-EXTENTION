@@ -85,10 +85,51 @@ export interface PrefillPrompt {
   text: string;
 }
 
+export type AgentDotState = 'idle' | 'working' | 'found' | 'done' | 'failed';
+
+export interface StatusDotMsg {
+  type: 'statusDot';
+  state: AgentDotState;
+  sessionId: string;
+}
+
+export interface AbortConfirmMsg {
+  type: 'abortConfirm';
+  sessionId: string;
+}
+
+export interface NetworkErrorMsg {
+  type: 'networkError';
+  message: string;
+  sessionId: string;
+}
+
+export interface NetworkReconnectedMsg {
+  type: 'networkReconnected';
+  sessionId: string;
+}
+
+export interface QueueStatusMsg {
+  type: 'queueStatus';
+  sessionId: string;
+  count: number;
+}
+
+export interface ThinkingEffortMsg {
+  type: 'thinkingEffort';
+  effort: 'low' | 'medium' | 'high';
+}
+
 export type HostToWebview = AssistantStreamChunk | ToolCallStart | ToolCallResult | AgentError | AgentDone | SessionsList | SessionMessages | PrefillPrompt | AgentStatus
   | ThinkingChunk
-  | SessionUsageMsg;
-export type WebviewToHost = UserMessage | { type: 'cancelRequest' } | { type: 'runCommand'; command: string } | { type: 'switchSession'; sessionId: string } | { type: 'newSession' } | { type: 'deleteSession'; sessionId: string } | { type: 'switchModel'; model: string } | { type: 'setCwd'; cwd: string } | { type: 'clearSession'; sessionId: string };
+  | SessionUsageMsg
+  | StatusDotMsg
+  | AbortConfirmMsg
+  | NetworkErrorMsg
+  | NetworkReconnectedMsg
+  | QueueStatusMsg
+  | ThinkingEffortMsg;
+export type WebviewToHost = UserMessage | { type: 'cancelRequest'; sessionId: string } | { type: 'runCommand'; command: string } | { type: 'switchSession'; sessionId: string } | { type: 'newSession' } | { type: 'deleteSession'; sessionId: string } | { type: 'switchModel'; model: string } | { type: 'setCwd'; cwd: string } | { type: 'clearSession'; sessionId: string } | { type: 'retryPrompt'; sessionId: string; text: string } | { type: 'setThinkingEffort'; effort: 'low' | 'medium' | 'high' };
 
 export interface Message {
   id: string;

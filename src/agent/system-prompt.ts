@@ -99,7 +99,7 @@ export function resetHarnessCache(): void {
   cachedHarness = undefined;
 }
 
-export function buildSystemPrompt(skills: Skill[], task?: string): string {
+export function buildSystemPrompt(skills: Skill[], task?: string, thinkingEffort?: 'low' | 'medium' | 'high'): string {
   const harness = loadPiHarness();
 
   let prompt: string;
@@ -131,6 +131,16 @@ export function buildSystemPrompt(skills: Skill[], task?: string): string {
 
   if (task) {
     prompt += `\nCurrent task: ${task}`;
+  }
+
+  // Thinking effort control
+  if (thinkingEffort) {
+    const effortInstructions: Record<string, string> = {
+      low: 'THINKING EFFORT: LOW. Be extremely concise. Skip extensive planning/thinking - jump straight to actions. Use minimal tool iterations. Prefer single-pass solutions. Do NOT use thinking blocks or long chains of reasoning.',
+      medium: 'Thinking effort: medium. Balance thoroughness with efficiency.',
+      high: 'THINKING EFFORT: HIGH. Use extensive reasoning, chain-of-thought, and careful planning. Take your time to think deeply about the problem.',
+    };
+    prompt += `\n\n${effortInstructions[thinkingEffort] || ''}`;
   }
 
   return prompt;

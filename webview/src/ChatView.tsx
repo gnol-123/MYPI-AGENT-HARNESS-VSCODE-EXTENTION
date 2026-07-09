@@ -3,11 +3,7 @@ import { marked } from 'marked';
 import hljs from 'highlight.js';
 import { Message, ToolCallEntry } from './types';
 
-// Configure marked with highlight.js
-marked.setOptions({
-  breaks: true,
-  gfm: true,
-});
+// marked renderer configured in renderMarkdown()
 
 interface ChatViewProps {
   messages: Message[];
@@ -16,6 +12,11 @@ interface ChatViewProps {
   waiting: boolean;
   thinking: boolean;
   thinkingText: string;
+  isRunning: boolean;
+  queuedCount: number;
+  queuedTexts: string[];
+  onAbort: () => void;
+  onCancelQueued: (index: number) => void;
 }
 
 const COLORS: Record<string, string> = {
@@ -97,32 +98,37 @@ const ToolCardComponent: React.FC<{ tc: ToolCallEntry }> = ({ tc }) => {
 
 /** Render markdown to HTML, highlighting code blocks. */
 function renderMarkdown(text: string): string {
-  return marked.parse(text, {
-    highlight: (code, lang) => {
-      if (lang && hljs.getLanguage(lang)) {
-        try {
-          return hljs.highlight(code, { language: lang }).value;
-        } catch {}
-      }
-      return hljs.highlightAuto(code).value;
-    },
-  }) as string;
+  const renderer = new marked.Renderer();
+  renderer.code = function({ text: code, lang }: { text: string; lang?: string }) {
+    if (lang && hljs.getLanguage(lang)) {
+      try {
+        const highlighted = hljs.highlight(code, { language: lang }).value;
+        return `<pre><code class="hljs language-${lang}">${highlighted}</code></pre>`;
+      } catch {}
+    }
+    const auto = hljs.highlightAuto(code).value;
+    return `<pre><code class="hljs">${auto}</code></pre>`;
+  };
+  return marked.parse(text, { renderer, breaks: true, gfm: true }) as string;
 }
 
-export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isLoading, waiting, thinking, thinkingText }) => {
+export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isLoading, waiting, thinking, thinkingText, isRunning, queuedCount, queuedTexts, onAbort, onCancelQueued }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll on any content change: messages, streaming, thinking
+  // Auto-scroll on any content change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingText, thinkingText, waiting]);
+  }, [messages, streamingText, thinkingText, waiting, queuedCount]);
 
   // Render streaming preview as markdown
   const streamingHtml = useMemo(() => {
     if (!streamingText) return '';
     return renderMarkdown(streamingText);
   }, [streamingText]);
+
+  // Find the last user message - that's the "active" one during a run
+  const lastUserMsgIndex = [...messages].reverse().findIndex((m) => m.role === 'user');
 
   return (
     <div style={styles.container} ref={containerRef}>
@@ -134,36 +140,104 @@ export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isL
         </div>
       )}
 
-      {messages.map((msg) => (
-        <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-          {msg.role === 'user' ? (
-            <div className="mypi-msg-user">
-              {msg.content}
-            </div>
-          ) : (
-            <div className="mypi-msg-assistant">
-              <div className="mypi-role">MYPI</div>
-              <div
-                className="mypi-md-content"
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
-              />
-            </div>
-          )}
-          {msg.toolCalls?.map((tc) => (
-            <ToolCardComponent key={tc.id} tc={tc} />
-          ))}
+      {messages.map((msg, idx) => {
+        const isLastUser = msg.role === 'user' && lastUserMsgIndex === messages.length - 1 - idx;
+        const showAbort = isLastUser && isRunning;
+
+        return (
+          <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+            {msg.role === 'user' ? (
+              <div className={`mypi-msg-user${showAbort ? ' active-bubble' : ''}`}>
+                {showAbort && (
+                  <button
+                    className="abort-btn"
+                    title="Abort this prompt"
+                    onClick={onAbort}
+                    style={{
+                      position: 'absolute',
+                      top: '-8px',
+                      right: '-8px',
+                      width: '22px',
+                      height: '22px',
+                      borderRadius: '50%',
+                      background: 'var(--vscode-badge-background)',
+                      border: '2px solid var(--vscode-sideBar-background)',
+                      color: 'var(--vscode-foreground)',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      zIndex: 5,
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = '#f38ba8';
+                      (e.currentTarget as HTMLElement).style.color = '#fff';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = 'var(--vscode-badge-background)';
+                      (e.currentTarget as HTMLElement).style.color = 'var(--vscode-foreground)';
+                    }}
+                  >
+                    &times;
+                  </button>
+                )}
+                {msg.content}
+              </div>
+            ) : (
+              <div className="mypi-msg-assistant">
+                <div className="mypi-role">MYPI</div>
+                <div
+                  className="mypi-md-content"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
+                />
+              </div>
+            )}
+            {msg.toolCalls?.map((tc) => (
+              <ToolCardComponent key={tc.id} tc={tc} />
+            ))}
+          </div>
+        );
+      })}
+
+      {/* Queued messages - show as pending bubbles */}
+      {queuedTexts.map((qt, qi) => (
+        <div key={`queued-${qi}`} style={{ alignSelf: 'flex-end', maxWidth: '85%', marginBottom: '8px' }}>
+          <div style={{
+            background: 'rgba(137,180,250,0.06)',
+            border: '1px dashed rgba(137,180,250,0.25)',
+            borderRadius: '10px 10px 2px 10px',
+            padding: '8px 12px',
+            fontSize: '12px',
+            color: 'var(--vscode-descriptionForeground)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+          }}>
+            <span style={{ fontSize: '9px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#89b4fa', whiteSpace: 'nowrap' }}>Queued #{qi + 1}</span>
+            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{qt}</span>
+            <button
+              style={{
+                width: '18px', height: '18px', borderRadius: '50%', background: 'transparent',
+                border: 'none', color: 'var(--vscode-descriptionForeground)', cursor: 'pointer',
+                fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}
+              title="Cancel queued message"
+              onClick={() => onCancelQueued(qi)}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#f38ba8'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--vscode-descriptionForeground)'; }}
+            >&times;</button>
+          </div>
         </div>
       ))}
 
-      {/* Waiting/thinking indicator — thinking text flows inline, no separate scrollbox */}
+      {/* Waiting/thinking indicator */}
       {waiting && (
         <div className="mypi-streaming">
           <div className="mypi-role" style={{ color: '#cba6f7' }}>MYPI</div>
-          <div className="mypi-typing">
-            <span className="mypi-typing-dot" />
-            <span className="mypi-typing-dot" />
-            <span className="mypi-typing-dot" />
-            <span className="mypi-typing-label">{thinking ? 'thinking' : 'queued'}</span>
+          <div style={{ fontSize: '12.5px', color: 'var(--vscode-descriptionForeground)', fontStyle: 'italic', padding: '4px 0' }}>
+            {thinking ? 'thinking...' : 'queued...'}
           </div>
           {thinking && thinkingText && (
             <div className="mypi-thinking-block">{thinkingText}</div>

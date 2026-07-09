@@ -79,6 +79,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       vscode.commands.registerCommand('mypi-by-sl.refactorSelection', () =>
         contextAction(context, 'refactorSelection'),
       ),
+      vscode.commands.registerCommand('mypi-by-sl.selfTest', () =>
+        selfTest(context),
+      ),
     );
 
     vscode.window.showInformationMessage('MYPI-by-SL activated! Click the cat icon or run "MYPI-by-SL: Open Chat".');
@@ -212,4 +215,48 @@ async function createAgentLoop(context: vscode.ExtensionContext, modelOverride?:
 
 export function deactivate(): void {
   // Cleanup if needed
+}
+
+async function selfTest(context: vscode.ExtensionContext): Promise<void> {
+  const apiKey = await getApiKey(context.secrets);
+  if (!apiKey) {
+    vscode.window.showErrorMessage('Self-test: No API key configured.');
+    return;
+  }
+
+  vscode.window.showInformationMessage('Self-test: Testing provider connection...');
+
+  try {
+    const provider = createOpenAICompatProvider({
+      apiKey,
+      model: 'glm-4.6',
+      baseUrl: 'https://api.z.ai/api/paas/v4',
+      providerKey: 'z-ai',
+      thinkingLevel: 'low',
+      timeoutMs: 30000,
+    });
+
+    let text = '', thinking = '', error = '';
+    const start = Date.now();
+
+    for await (const event of provider.streamChat(
+      [{ role: 'user', content: 'Say "OK"' }],
+      [],
+      'Reply with just OK.',
+      256,
+    )) {
+      if (event.type === 'text') text += event.text;
+      else if (event.type === 'thinking') thinking += event.text;
+      else if (event.type === 'error') error = event.message;
+    }
+
+    const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+    if (error) {
+      vscode.window.showErrorMessage(`Self-test FAILED (${elapsed}s): ${error}`);
+    } else {
+      vscode.window.showInformationMessage(`Self-test OK (${elapsed}s): "${text.trim()}" (thinking: ${thinking.length} chars)`);
+    }
+  } catch (err: any) {
+    vscode.window.showErrorMessage(`Self-test error: ${err.message}`);
+  }
 }

@@ -12,12 +12,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private extensionUri: vscode.Uri;
   private pendingPrompt: string | undefined;
   private sessionManager = new SessionManager();
-  private busySessions = new Set<string>();
+  /** Set of sessions currently running the agent loop */
+  private runningSessions = new Set<string>();
+  /** Per-session queue of prompt text waiting to run after the current one */
+  private sessionQueues = new Map<string, string[]>();
   public onSwitchModel: ((model: string) => void) | undefined;
   public onRequestAgentLoop: (() => Promise<AgentLoop | undefined>) | undefined;
+  /** Current thinking effort: 'low', 'medium', 'high' */
+  private thinkingEffort: 'low' | 'medium' | 'high' = 'medium';
 
   constructor(extensionUri: vscode.Uri) {
     this.extensionUri = extensionUri;
+  }
+
+  setThinkingEffort(effort: 'low' | 'medium' | 'high'): void {
+    this.thinkingEffort = effort;
+    this.agentLoop?.setThinkingEffort(effort);
+    this.postMessage({ type: 'thinkingEffort', effort });
   }
 
   setState(state: vscode.Memento): void {
@@ -111,16 +122,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async runInSession(session: Session, text: string): Promise<void> {
-    this.busySessions.add(session.id);
+    this.runningSessions.add(session.id);
     this.sessionManager.addMessage(session.id, 'user', text);
     this.sendSessionsList();
 
+    // Signal working status
+    this.postMessage({ type: 'statusDot', state: 'working', sessionId: session.id });
+
     let fullResponse = '';
+    let aborted = false;
 
     try {
       await this.agentLoop!.run(session.history, text, (event: LLMEvent) => {
         switch (event.type) {
           case 'text':
+            if (event.text === '__FOUND_SOLUTION__') {
+              // Found-solution signal from loop
+              this.postMessage({ type: 'statusDot', state: 'found', sessionId: session.id });
+              return;
+            }
             fullResponse += event.text;
             this.postMessage({
               type: 'assistantStreamChunk',
@@ -154,13 +174,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             });
             break;
           case 'error':
-            fullResponse += `\nError: ${event.message}`;
             this.postMessage({
               type: 'error',
               message: event.message,
-              retryable: true,
+              retryable: !!event.message.match(/retry/i),
               sessionId: session.id,
             });
+            // Only append genuine errors, not retry notices
+            if (!event.message.match(/retry/i)) {
+              fullResponse += `\nError: ${event.message}`;
+            }
             break;
           case 'done':
             break;
@@ -168,13 +191,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      fullResponse += `\nError: ${msg}`;
-      this.postMessage({ type: 'error', message: msg, retryable: true, sessionId: session.id });
+      if (msg.includes('abort') || msg.includes('AbortError')) {
+        aborted = true;
+        this.postMessage({ type: 'abortConfirm', sessionId: session.id });
+        this.postMessage({ type: 'statusDot', state: 'failed', sessionId: session.id });
+      } else if (msg.includes('fetch') || msg.includes('network') || msg.includes('ECONN') || msg.includes('ETIMEDOUT')) {
+        this.postMessage({ type: 'statusDot', state: 'failed', sessionId: session.id });
+        this.postMessage({ type: 'networkError', message: msg, sessionId: session.id });
+      } else {
+        fullResponse += `\nError: ${msg}`;
+        this.postMessage({ type: 'error', message: msg, retryable: true, sessionId: session.id });
+        this.postMessage({ type: 'statusDot', state: 'failed', sessionId: session.id });
+      }
     } finally {
-      this.busySessions.delete(session.id);
+      this.runningSessions.delete(session.id);
     }
 
-    if (fullResponse) {
+    if (!aborted && fullResponse) {
       this.sessionManager.addMessage(session.id, 'assistant', fullResponse);
     }
     this.postMessage({
@@ -182,8 +215,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       turnId: Date.now().toString(),
       sessionId: session.id,
     });
+    this.postMessage({ type: 'statusDot', state: 'done', sessionId: session.id });
     this.sendStatus();
     this.sendSessionsList();
+
+    // Drain queued messages for this session
+    const queue = this.sessionQueues.get(session.id);
+    if (queue && queue.length > 0) {
+      const nextText = queue.shift()!;
+      if (queue.length === 0) this.sessionQueues.delete(session.id);
+      this.sendSessionsList();
+      await this.runInSession(session, nextText);
+    }
   }
 
   private async handleMessage(message: Record<string, unknown>): Promise<void> {
@@ -204,12 +247,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         const sessionId = message.sessionId as string;
         this.sessionManager.setActive(sessionId);
         this.sendSessionsList();
+        // Send queue status for the switched session
+        const q = this.sessionQueues.get(sessionId);
+        if (q) this.postMessage({ type: 'queueStatus', sessionId, count: q.length });
         break;
       }
 
       case 'deleteSession': {
         const sessionId = message.sessionId as string;
         this.sessionManager.delete(sessionId);
+        this.sessionQueues.delete(sessionId);
         this.sendSessionsList();
         break;
       }
@@ -217,6 +264,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       case 'clearSession': {
         const sessionId = message.sessionId as string;
         this.sessionManager.clear(sessionId);
+        this.sessionQueues.delete(sessionId);
         this.sendSessionsList();
         break;
       }
@@ -236,23 +284,56 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
       }
 
+      case 'cancelRequest': {
+        const sessionId = message.sessionId as string;
+        // Abort the running agent loop
+        if (this.agentLoop) {
+          this.agentLoop.abort();
+        }
+        // Clear the queue for this session
+        this.sessionQueues.delete(sessionId);
+        this.postMessage({ type: 'queueStatus', sessionId, count: 0 });
+        this.postMessage({ type: 'statusDot', state: 'failed', sessionId });
+        this.sendSessionsList();
+        break;
+      }
+
+      case 'retryPrompt': {
+        const sessionId = message.sessionId as string;
+        const text = message.text as string;
+        const session = this.sessionManager.get(sessionId);
+        if (!session) return;
+        this.postMessage({ type: 'networkReconnected', sessionId });
+        this.postMessage({ type: 'statusDot', state: 'working', sessionId });
+        // Need agent loop
+        if (!this.agentLoop && this.onRequestAgentLoop) {
+          await this.onRequestAgentLoop();
+        }
+        if (!this.agentLoop) {
+          this.postMessage({
+            type: 'error',
+            message: 'No API key configured. Run "MYPI-by-SL: Set API Key" from the command palette (Ctrl+Shift+P).',
+            retryable: false,
+            sessionId,
+          });
+          return;
+        }
+        await this.runInSession(session, text);
+        break;
+      }
+
+      case 'setThinkingEffort': {
+        const effort = message.effort as 'low' | 'medium' | 'high';
+        this.setThinkingEffort(effort);
+        break;
+      }
+
       case 'userMessage': {
         const text = message.text as string;
         // Pin to the origin session NOW — activeId may change mid-run.
         const sessionId = (message.sessionId as string) || this.sessionManager.activeId;
         const session = this.sessionManager.get(sessionId);
         if (!session) return;
-
-        if (this.busySessions.has(session.id)) {
-          this.postMessage({
-            type: 'error',
-            message: 'Still working on the previous message in this chat — give it a moment.',
-            retryable: false,
-            sessionId: session.id,
-          });
-          this.sendSessionsList();
-          return;
-        }
 
         if (!this.agentLoop && this.onRequestAgentLoop) {
           await this.onRequestAgentLoop();
@@ -264,6 +345,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             retryable: false,
             sessionId: session.id,
           });
+          return;
+        }
+
+        if (this.runningSessions.has(session.id)) {
+          // Queue the message instead of blocking
+          const queue = this.sessionQueues.get(session.id) || [];
+          queue.push(text);
+          this.sessionQueues.set(session.id, queue);
+          this.postMessage({ type: 'queueStatus', sessionId: session.id, count: queue.length });
+          this.sendSessionsList();
           return;
         }
 
