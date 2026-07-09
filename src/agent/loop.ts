@@ -183,17 +183,28 @@ export class AgentLoop {
               ? `Error: ${result.error}`
               : result.content;
 
+            onEvent({
+              type: 'tool_result',
+              id: tc.id,
+              result: resultText + (result.truncated ? '\n[Output truncated]' : ''),
+              truncated: result.truncated,
+              isError: !!result.error,
+            });
+
             history.addToolResult(
               tc.id,
               resultText + (result.truncated ? '\n[Output truncated]' : ''),
               !!result.error,
             );
           } catch (err) {
-            history.addToolResult(
-              tc.id,
-              `Error: ${err instanceof Error ? err.message : String(err)}`,
-              true,
-            );
+            const errMsg = `Error: ${err instanceof Error ? err.message : String(err)}`;
+            onEvent({
+              type: 'tool_result',
+              id: tc.id,
+              result: errMsg,
+              isError: true,
+            });
+            history.addToolResult(tc.id, errMsg, true);
           }
         }
       }

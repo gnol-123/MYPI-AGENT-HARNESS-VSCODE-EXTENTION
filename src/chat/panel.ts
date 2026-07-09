@@ -127,7 +127,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.sendSessionsList();
 
     // Signal working status
-    this.postMessage({ type: 'statusDot', state: 'working', sessionId: session.id });
+    this.postMessage({ type: 'statusDot', state: 'working', label: 'Starting...', sessionId: session.id });
 
     let fullResponse = '';
     let aborted = false;
@@ -137,8 +137,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         switch (event.type) {
           case 'text':
             if (event.text === '__FOUND_SOLUTION__') {
-              // Found-solution signal from loop
-              this.postMessage({ type: 'statusDot', state: 'found', sessionId: session.id });
+              this.postMessage({ type: 'statusDot', state: 'found', label: 'Found solution!', sessionId: session.id });
               return;
             }
             fullResponse += event.text;
@@ -147,9 +146,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               text: event.text,
               sessionId: session.id,
             });
+            this.postMessage({ type: 'statusDot', state: 'working', label: 'Writing response...', sessionId: session.id });
             break;
           case 'thinking':
             this.postMessage({ type: 'thinking', sessionId: session.id, text: event.text });
+            this.postMessage({ type: 'statusDot', state: 'working', label: 'Thinking...', sessionId: session.id });
             break;
           case 'usage': {
             const model = this.agentLoop!.getStatus().model;
@@ -172,6 +173,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               params: event.input,
               sessionId: session.id,
             });
+            this.postMessage({ type: 'statusDot', state: 'working', label: `Running ${event.name}...`, sessionId: session.id });
+            break;
+          case 'tool_result':
+            this.postMessage({
+              type: 'toolCallResult',
+              id: event.id,
+              result: event.result,
+              truncated: event.truncated,
+              isError: event.isError,
+              sessionId: session.id,
+            });
+            // Send found-solution signal on first successful tool result
+            this.postMessage({ type: 'statusDot', state: 'found', label: 'Found solution!', sessionId: session.id });
             break;
           case 'error':
             this.postMessage({

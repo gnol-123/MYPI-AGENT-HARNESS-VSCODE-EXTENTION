@@ -282,10 +282,12 @@ export const App: React.FC = () => {
 
   // New state: status dot, queues, network errors
   const [dotStateBySession, setDotStateBySession] = useState<Map<string, AgentDotState>>(new Map());
+  const [dotLabelBySession, setDotLabelBySession] = useState<Map<string, string>>(new Map());
   const [queuedBySession, setQueuedBySession] = useState<Map<string, string[]>>(new Map());
   const [networkErrorBySession, setNetworkErrorBySession] = useState<Map<string, string>>(new Map());
   const [thinkingEffort, setThinkingEffort] = useState<'low' | 'medium' | 'high'>('medium');
   const [runningSessions, setRunningSessions] = useState<Set<string>>(new Set());
+  const [liveToolResultsBySession, setLiveToolResultsBySession] = useState<Map<string, Map<string, { result: string; truncated?: boolean; isError?: boolean }>>>(new Map());
 
   const streamingText = streamingBySession.get(activeSessionId) ?? '';
   const isLoading = streamingBySession.has(activeSessionId);
@@ -293,9 +295,25 @@ export const App: React.FC = () => {
   const thinkingText = thinkingBySession.get(activeSessionId) ?? '';
   const activeUsage = usageBySession.get(activeSessionId);
   const dotState = dotStateBySession.get(activeSessionId) ?? 'idle';
+  const dotLabel = dotLabelBySession.get(activeSessionId) ?? '';
   const isRunning = runningSessions.has(activeSessionId);
   const queuedTexts = queuedBySession.get(activeSessionId) ?? [];
   const networkError = networkErrorBySession.get(activeSessionId) ?? '';
+  const liveToolResults = liveToolResultsBySession.get(activeSessionId);
+
+  // Compute live tool calls for display during streaming
+  const liveToolCalls = (() => {
+    const calls = toolCallsBySession.get(activeSessionId);
+    const results = liveToolResultsBySession.get(activeSessionId);
+    if (!calls) return [];
+    return Array.from(calls.entries()).map(([id, tc]) => ({
+      id,
+      name: tc.name,
+      params: tc.params,
+      result: results?.get(id)?.result,
+      truncated: results?.get(id)?.truncated,
+    }));
+  })();
 
   const sendMessage = useCallback((text: string) => {
     const userMsg: Message = {
@@ -478,6 +496,16 @@ export const App: React.FC = () => {
             next.delete(msg.sessionId);
             return next;
           });
+          setLiveToolResultsBySession((prev) => {
+            const next = new Map(prev);
+            next.delete(msg.sessionId);
+            return next;
+          });
+          setDotLabelBySession((prev) => {
+            const next = new Map(prev);
+            next.delete(msg.sessionId);
+            return next;
+          });
           setThinkingSessions((prev) => {
             const next = new Set(prev);
             next.delete(msg.sessionId);
@@ -498,6 +526,19 @@ export const App: React.FC = () => {
 
         case 'statusDot':
           setDotStateBySession((prev) => new Map(prev).set(msg.sessionId, msg.state));
+          if (msg.label) {
+            setDotLabelBySession((prev) => new Map(prev).set(msg.sessionId, msg.label));
+          }
+          break;
+
+        case 'toolCallResult':
+          setLiveToolResultsBySession((prev) => {
+            const next = new Map(prev);
+            const inner = new Map(next.get(msg.sessionId) ?? []);
+            inner.set(msg.id, { result: msg.result, truncated: msg.truncated, isError: msg.isError });
+            next.set(msg.sessionId, inner);
+            return next;
+          });
           break;
 
         case 'abortConfirm':
@@ -507,6 +548,21 @@ export const App: React.FC = () => {
             return next;
           });
           setDotStateBySession((prev) => new Map(prev).set(msg.sessionId, 'failed'));
+          setDotLabelBySession((prev) => {
+            const next = new Map(prev);
+            next.delete(msg.sessionId);
+            return next;
+          });
+          setToolCallsBySession((prev) => {
+            const next = new Map(prev);
+            next.delete(msg.sessionId);
+            return next;
+          });
+          setLiveToolResultsBySession((prev) => {
+            const next = new Map(prev);
+            next.delete(msg.sessionId);
+            return next;
+          });
           break;
 
         case 'networkError':
@@ -656,8 +712,8 @@ export const App: React.FC = () => {
         @keyframes fadeSlideIn { from { opacity: 0; transform: translateX(4px); } to { opacity: 1; transform: translateX(0); } }
       `}</style>
       <div style={styles.header}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>MYPI-by-SL</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+          <span style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>MYPI-by-SL</span>
           <span
             style={{
               width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0,
@@ -667,6 +723,11 @@ export const App: React.FC = () => {
             }}
             title={`Status: ${dotState}`}
           />
+          {dotLabel && (
+            <span style={{ fontSize: '10px', color: 'var(--vscode-descriptionForeground)', fontWeight: 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+              {dotLabel}
+            </span>
+          )}
         </span>
         <div style={styles.headerActions}>
           <button style={styles.headerBtn} onClick={() => { setShowHelp(false); setShowHistory((v) => !v); }} title="Session history (/resume)">⟲</button>
@@ -762,6 +823,7 @@ export const App: React.FC = () => {
           isRunning={isRunning}
           queuedCount={queuedTexts.length}
           queuedTexts={queuedTexts}
+          liveToolCalls={liveToolCalls}
           onAbort={handleAbort}
           onCancelQueued={handleCancelQueued}
         />

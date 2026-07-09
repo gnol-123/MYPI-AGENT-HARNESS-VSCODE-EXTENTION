@@ -24,6 +24,8 @@ export interface ToolCallResult {
   id: string;
   result: string;
   truncated?: boolean;
+  isError?: boolean;
+  sessionId: string;
 }
 
 export interface AgentError {
@@ -91,6 +93,7 @@ export interface StatusDotMsg {
   type: 'statusDot';
   state: AgentDotState;
   sessionId: string;
+  label?: string;
 }
 
 export interface AbortConfirmMsg {
@@ -145,6 +148,7 @@ export interface ToolCallEntry {
   params: Record<string, unknown>;
   result?: string;
   truncated?: boolean;
+  isError?: boolean;
 }
 
 export interface SessionInfo {

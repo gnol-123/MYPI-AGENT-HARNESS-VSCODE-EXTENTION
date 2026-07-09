@@ -25,6 +25,7 @@ export type LLMEvent =
   | { type: 'thinking'; text: string }
   | { type: 'usage'; inputTokens: number; outputTokens: number }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  | { type: 'tool_result'; id: string; result: string; truncated?: boolean; isError?: boolean }
   | { type: 'error'; message: string }
   | { type: 'done' };
 

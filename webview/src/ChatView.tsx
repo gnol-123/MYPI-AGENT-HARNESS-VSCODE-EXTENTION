@@ -15,6 +15,7 @@ interface ChatViewProps {
   isRunning: boolean;
   queuedCount: number;
   queuedTexts: string[];
+  liveToolCalls?: ToolCallEntry[];
   onAbort: () => void;
   onCancelQueued: (index: number) => void;
 }
@@ -90,7 +91,7 @@ const ToolCardComponent: React.FC<{ tc: ToolCallEntry }> = ({ tc }) => {
         </span>
       </div>
       {expanded && tc.result !== undefined && (
-        <div className="mypi-tool-result">{tc.result || '(no output)'}</div>
+        <div className="mypi-tool-result" style={tc.isError ? { color: '#f38ba8' } : undefined}>{tc.result || '(no output)'}</div>
       )}
     </div>
   );
@@ -112,14 +113,14 @@ function renderMarkdown(text: string): string {
   return marked.parse(text, { renderer, breaks: true, gfm: true }) as string;
 }
 
-export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isLoading, waiting, thinking, thinkingText, isRunning, queuedCount, queuedTexts, onAbort, onCancelQueued }) => {
+export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isLoading, waiting, thinking, thinkingText, isRunning, queuedCount, queuedTexts, liveToolCalls, onAbort, onCancelQueued }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll on any content change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingText, thinkingText, waiting, queuedCount]);
+  }, [messages, streamingText, thinkingText, waiting, queuedCount, liveToolCalls]);
 
   // Render streaming preview as markdown
   const streamingHtml = useMemo(() => {
@@ -242,6 +243,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isL
           {thinking && thinkingText && (
             <div className="mypi-thinking-block">{thinkingText}</div>
           )}
+        </div>
+      )}
+
+      {/* Live tool calls during streaming */}
+      {liveToolCalls && liveToolCalls.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+          {liveToolCalls.map((tc) => (
+            <ToolCardComponent key={tc.id} tc={tc} />
+          ))}
         </div>
       )}
 
