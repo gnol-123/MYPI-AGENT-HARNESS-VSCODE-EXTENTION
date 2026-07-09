@@ -126,10 +126,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     let fullResponse = '';
     let thinkingText = '';
     let aborted = false;
+    // The status label only needs posting when it changes. Posting it per token
+    // doubles the IPC traffic of a stream for no visible benefit.
+    let writingLabelSent = false;
+    let thinkingLabelSent = false;
 
     try {
       await this.agentLoop!.run(session.history, text, (event: LLMEvent) => {
         switch (event.type) {
+          case 'stream_start':
+            // First byte back from the model. Replaces the webview's optimistic
+            // "Starting..." even when the turn is a tool call with no text.
+            // Fires once per turn, so it also resets the per-turn label latches.
+            writingLabelSent = false;
+            thinkingLabelSent = false;
+            this.postMessage({ type: 'statusDot', state: 'working', label: 'Thinking...', sessionId: session.id });
+            break;
+          case 'tool_use_start':
+            this.postMessage({ type: 'statusDot', state: 'working', label: `Preparing ${event.name}...`, sessionId: session.id });
+            break;
           case 'text':
             if (event.text === '__FOUND_SOLUTION__') {
               this.postMessage({ type: 'statusDot', state: 'found', label: 'Found solution!', sessionId: session.id });
@@ -141,12 +156,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               text: event.text,
               sessionId: session.id,
             });
-            this.postMessage({ type: 'statusDot', state: 'working', label: 'Writing response...', sessionId: session.id });
+            if (!writingLabelSent) {
+              writingLabelSent = true;
+              this.postMessage({ type: 'statusDot', state: 'working', label: 'Writing response...', sessionId: session.id });
+            }
             break;
           case 'thinking':
             thinkingText += event.text;
             this.postMessage({ type: 'thinking', sessionId: session.id, text: event.text });
-            this.postMessage({ type: 'statusDot', state: 'working', label: 'Thinking...', sessionId: session.id });
+            if (!thinkingLabelSent) {
+              thinkingLabelSent = true;
+              this.postMessage({ type: 'statusDot', state: 'working', label: 'Thinking...', sessionId: session.id });
+            }
             break;
           case 'usage': {
             const model = this.agentLoop!.getStatus().model;

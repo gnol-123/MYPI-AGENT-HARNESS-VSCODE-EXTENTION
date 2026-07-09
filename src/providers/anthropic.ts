@@ -11,8 +11,38 @@ interface AnthropicConfig {
 
 const THINKING_BUDGETS = { low: 2048, medium: 4096, high: 8192 } as const;
 
+type ConvertedMessage = { role: 'user' | 'assistant'; content: unknown };
+
+/**
+ * Marks the tail of the conversation so the growing history is cached too.
+ * The previous turn's breakpoint is always a prefix of the next request, so
+ * each turn reads the cache instead of reprocessing every earlier message.
+ */
+function withConversationCacheBreakpoint(messages: ConvertedMessage[]): ConvertedMessage[] {
+  if (messages.length === 0) return messages;
+
+  const last = messages[messages.length - 1];
+  const blocks = typeof last.content === 'string'
+    ? (last.content ? [{ type: 'text' as const, text: last.content }] : [])
+    : (last.content as Record<string, unknown>[]).slice();
+
+  // An empty text block is rejected by the API — leave the request untouched.
+  if (blocks.length === 0) return messages;
+
+  blocks[blocks.length - 1] = {
+    ...blocks[blocks.length - 1],
+    cache_control: { type: 'ephemeral' as const },
+  };
+
+  const out = messages.slice();
+  out[out.length - 1] = { ...last, content: blocks };
+  return out;
+}
+
 export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
-  let thinkingEnabled = (config.thinkingLevel ?? 'medium') !== 'off';
+  const configuredLevel = config.thinkingLevel ?? 'medium';
+  let thinkingEnabled = configuredLevel !== 'off';
+  const thinkingBudget = THINKING_BUDGETS[configuredLevel === 'off' ? 'low' : configuredLevel];
   const client = new Anthropic({
     apiKey: config.apiKey,
     timeout: config.timeoutMs ?? 120_000,
@@ -55,17 +85,27 @@ export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
         }));
 
         const thinking = thinkingEnabled
-          ? { type: 'enabled' as const, budget_tokens: THINKING_BUDGETS['medium'] }
+          ? { type: 'enabled' as const, budget_tokens: thinkingBudget }
           : undefined;
 
         let droppedThinking = false;
 
+        // Cache prefix order is tools -> system -> messages, so a single
+        // breakpoint on the system block also caches the tool definitions.
+        // Every turn of the agent loop resends this whole prefix; without the
+        // breakpoint the API reprocesses it from scratch each time.
         const stream = client.messages.stream({
           model: config.model,
           max_tokens: thinking ? Math.max(maxTokens, thinking.budget_tokens + 4096) : maxTokens,
           ...(thinking ? { thinking } : {}),
-          system: systemPrompt,
-          messages: convertedMessages as any,
+          system: [
+            {
+              type: 'text' as const,
+              text: systemPrompt,
+              cache_control: { type: 'ephemeral' as const },
+            },
+          ],
+          messages: withConversationCacheBreakpoint(convertedMessages) as any,
           tools: tools.map((t) => ({
             name: t.name,
             description: t.description,
@@ -74,7 +114,15 @@ export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
         } as any);
 
         for await (const event of stream) {
-          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+          if (event.type === 'message_start') {
+            // First byte of the turn. A tool-calling turn emits no text or
+            // thinking, so this is the UI's only early progress signal.
+            yield { type: 'stream_start' };
+          } else if (event.type === 'content_block_start' && (event.content_block as any).type === 'tool_use') {
+            // The name and id arrive here; only the arguments stream after.
+            const cb = event.content_block as any;
+            yield { type: 'tool_use_start', id: cb.id, name: cb.name };
+          } else if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
             yield { type: 'text', text: event.delta.text };
           } else if (event.type === 'content_block_delta' && (event.delta as any).type === 'thinking_delta') {
             droppedThinking = false;

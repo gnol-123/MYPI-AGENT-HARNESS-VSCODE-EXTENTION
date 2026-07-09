@@ -840,6 +840,37 @@ export const App: React.FC = () => {
         @keyframes statusWorking { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
         @keyframes statusFound { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.15; transform: scale(0.6); } }
         .mypi-msg-user.active-bubble { outline: 1px solid rgba(137,180,250,0.4); outline-offset: 2px; position: relative; }
+
+        /* Tool card blink animations */
+        @keyframes toolBlink { 0%, 100% { box-shadow: 0 0 0 0 currentColor; } 50% { box-shadow: 0 0 4px 1px currentColor; } }
+        @keyframes toolNameBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        /* Tool cards */
+        .mypi-tool-card { margin: 2px 0 2px 16px; border-left: 3px solid var(--vscode-textBlockQuote-border); padding-left: 10px; }
+        .mypi-tool-card.executing { border-left-color: rgba(137,180,250,0.55); }
+        .mypi-tool-header { display: flex; align-items: center; gap: 7px; cursor: pointer; padding: 3px 0; user-select: none; }
+        .mypi-tool-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .mypi-tool-name { font-weight: 600; font-size: 11px; }
+        .mypi-tool-params { color: var(--vscode-descriptionForeground); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+        .mypi-tool-result { margin-top: 3px; padding: 4px 8px; background: var(--vscode-textCodeBlock-background); border-radius: 4px; font-size: 11px; font-family: var(--vscode-editor-font-family, monospace); white-space: pre-wrap; word-break: break-all; overflow-y: auto; }
+
+        /* Messages */
+        .mypi-msg-user { align-self: flex-end; max-width: 85%; background: linear-gradient(135deg, rgba(137,180,250,0.15), rgba(203,166,247,0.12)); border: 1px solid rgba(137,180,250,0.2); border-radius: 10px 10px 2px 10px; padding: 8px 12px; font-size: 12.5px; line-height: 1.55; word-break: break-word; position: relative; margin-bottom: 4px; }
+        .mypi-msg-assistant { width: 100%; margin-bottom: 6px; }
+        .mypi-role { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; color: var(--vscode-descriptionForeground); }
+        .mypi-md-content { font-size: 12.5px; line-height: 1.6; word-break: break-word; }
+        .mypi-md-content p { margin: 4px 0; }
+        .mypi-md-content pre { margin: 6px 0; padding: 8px 10px; background: var(--vscode-textCodeBlock-background); border-radius: 4px; overflow-x: auto; font-size: 11px; }
+        .mypi-md-content code { font-family: var(--vscode-editor-font-family, monospace); font-size: 11px; }
+        .mypi-md-content p > code { background: var(--vscode-textCodeBlock-background); padding: 1px 5px; border-radius: 3px; }
+        .mypi-md-content blockquote { border-left: 3px solid rgba(203,166,247,0.4); margin: 4px 0; padding: 4px 10px; color: var(--vscode-descriptionForeground); }
+        .mypi-md-content ul, .mypi-md-content ol { margin: 4px 0; padding-left: 20px; }
+        .mypi-md-content li { margin: 2px 0; }
+        .mypi-streaming { width: 100%; }
+        @keyframes cursorBlink { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+        .mypi-cursor-blink { display: inline-block; width: 8px; height: 14px; background: var(--vscode-foreground); animation: cursorBlink 0.8s step-end infinite; vertical-align: text-bottom; margin-left: 2px; border-radius: 1px; }
+        .mypi-thinking-block { margin: 4px 0 0 4px; border-left: 2px solid rgba(203,166,247,0.4); padding: 4px 10px; font-size: 12px; font-style: italic; color: #b4b9d0; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+        .mypi-welcome { margin: 12px; padding: 16px; border-radius: 8px; background: var(--vscode-textBlockQuote-background); border: 1px solid var(--vscode-textBlockQuote-border); text-align: center; }
         .abort-btn { position: absolute; top: -8px; right: -8px; animation: fadeSlideIn 0.2s ease-out; }
         @keyframes fadeSlideIn { from { opacity: 0; transform: translateX(4px); } to { opacity: 1; transform: translateX(0); } }
       `}</style>

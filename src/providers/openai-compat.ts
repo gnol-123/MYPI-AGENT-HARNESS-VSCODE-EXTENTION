@@ -136,10 +136,15 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
           return;
         }
 
+        // The response is open. Tell the UI now — a tool-calling turn may emit
+        // no content at all, and this is the only early signal it will get.
+        yield { type: 'stream_start' };
+
         const decoder = new TextDecoder();
         let buffer = '';
 
         const toolCalls: Map<number, { id: string; name: string; arguments: string }> = new Map();
+        const announced = new Set<number>();
 
         while (true) {
           const { done, value } = await reader.read();
@@ -190,6 +195,12 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
                   if (tc.id) existing.id = tc.id;
                   if (tc.function?.name) existing.name = tc.function.name;
                   if (tc.function?.arguments) existing.arguments += tc.function.arguments;
+
+                  // Announce as soon as the name lands; the arguments still stream.
+                  if (!announced.has(idx) && existing.name) {
+                    announced.add(idx);
+                    yield { type: 'tool_use_start', id: existing.id, name: existing.name };
+                  }
                 }
               }
             } catch {

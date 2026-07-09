@@ -74,7 +74,10 @@ export class AgentLoop {
     const signal = this.abortController.signal;
     history.addUserMessage(userMessage);
 
-    const systemPrompt = buildSystemPrompt(this.skills, userMessage, this.thinkingEffort);
+    // The user message is already the last entry in `messages`. Repeating it in
+    // the system prompt changes the prompt every turn, which makes the prompt
+    // cache miss on every request.
+    const systemPrompt = buildSystemPrompt(this.skills, undefined, this.thinkingEffort);
     const toolDefs = this.toolRegistry.getAllToolDefs();
     let iterations = 0;
     let foundSolution = false;
@@ -125,7 +128,10 @@ export class AgentLoop {
           for await (const event of stream) {
             if (signal.aborted) break;
 
-            if (event.type === 'text') {
+            if (event.type === 'stream_start' || event.type === 'tool_use_start') {
+              // Progress only — never becomes history or a tool invocation.
+              onEvent(event);
+            } else if (event.type === 'text') {
               currentText += event.text;
               onEvent(event);
             } else if (event.type === 'thinking') {

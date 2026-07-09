@@ -21,6 +21,10 @@ export interface ToolDef {
 }
 
 export type LLMEvent =
+  // Progress signals. A tool-calling turn produces no text or thinking, so
+  // without these the UI has nothing to render until the turn is over.
+  | { type: 'stream_start' }
+  | { type: 'tool_use_start'; id: string; name: string }
   | { type: 'text'; text: string }
   | { type: 'thinking'; text: string }
   | { type: 'usage'; inputTokens: number; outputTokens: number }
