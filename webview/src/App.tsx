@@ -287,6 +287,54 @@ function relativeTime(ts: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+/** Pinned live task list fed by the agent's todo_write tool. */
+const TodoList: React.FC<{ items: import('./types').TodoItem[] }> = ({ items }) => {
+  const [collapsed, setCollapsed] = useState(false);
+  const done = items.filter((t) => t.status === 'completed').length;
+  const symbol = (s: string) => (s === 'completed' ? '★' : s === 'in_progress' ? '►' : '□');
+  const color = (s: string) =>
+    s === 'completed' ? '#a6e3a1' : s === 'in_progress' ? '#89b4fa' : 'var(--vscode-descriptionForeground)';
+
+  return (
+    <div style={{
+      margin: '0 12px 6px', padding: '6px 10px',
+      background: 'rgba(137,180,250,0.05)',
+      border: '1px solid rgba(137,180,250,0.2)',
+      borderRadius: '8px', fontSize: '11.5px',
+    }}>
+      <div
+        style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', userSelect: 'none' }}
+        onClick={() => setCollapsed((c) => !c)}
+      >
+        <span style={{ fontSize: '9px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#89b4fa' }}>
+          Tasks {done}/{items.length}
+        </span>
+        <div style={{ flex: 1, height: '3px', borderRadius: '2px', background: 'rgba(137,180,250,0.15)', overflow: 'hidden' }}>
+          <div style={{ width: `${items.length ? (done / items.length) * 100 : 0}%`, height: '100%', background: '#a6e3a1', transition: 'width 0.3s ease' }} />
+        </div>
+        <span style={{ color: 'var(--vscode-descriptionForeground)', fontSize: '10px' }}>{collapsed ? '▸' : '▾'}</span>
+      </div>
+      {!collapsed && (
+        <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          {items.map((t, i) => (
+            <div key={i} style={{ display: 'flex', gap: '7px', alignItems: 'baseline', lineHeight: '1.5' }}>
+              <span style={{ color: color(t.status), flexShrink: 0, animation: t.status === 'in_progress' ? 'mypi-blink 1.2s ease-in-out infinite' : undefined }}>
+                {symbol(t.status)}
+              </span>
+              <span style={{
+                color: t.status === 'completed' ? 'var(--vscode-descriptionForeground)' : 'var(--vscode-foreground)',
+                textDecoration: t.status === 'completed' ? 'line-through' : undefined,
+                fontWeight: t.status === 'in_progress' ? 600 : 400,
+              }}>{t.content}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <style>{'@keyframes mypi-blink { 0%,100% { opacity: 1 } 50% { opacity: 0.35 } }'}</style>
+    </div>
+  );
+};
+
 export const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingBySession, setStreamingBySession] = useState<Map<string, string>>(new Map());
@@ -308,6 +356,7 @@ export const App: React.FC = () => {
   const [networkErrorBySession, setNetworkErrorBySession] = useState<Map<string, string>>(new Map());
   const [thinkingEffort, setThinkingEffort] = useState<'low' | 'medium' | 'high'>('medium');
   const [runningSessions, setRunningSessions] = useState<Set<string>>(new Set());
+  const [todosBySession, setTodosBySession] = useState<Map<string, import('./types').TodoItem[]>>(new Map());
   const [liveToolResultsBySession, setLiveToolResultsBySession] = useState<Map<string, Map<string, { result: string; truncated?: boolean; isError?: boolean }>>>(new Map());
   /** Ordered stream blocks for inline rendering (PI-style) */
   const [streamBlocksBySession, setStreamBlocksBySession] = useState<Map<string, import('./types').StreamBlock[]>>(new Map());
@@ -632,6 +681,15 @@ export const App: React.FC = () => {
           });
           break;
         }
+
+        case 'todos':
+          setTodosBySession((prev) => {
+            const next = new Map(prev);
+            if (msg.items.length === 0) next.delete(msg.sessionId);
+            else next.set(msg.sessionId, msg.items);
+            return next;
+          });
+          break;
 
         case 'statusDot':
           setDotStateBySession((prev) => new Map(prev).set(msg.sessionId, msg.state));
@@ -1031,6 +1089,10 @@ export const App: React.FC = () => {
           onAbort={handleAbort}
           onCancelQueued={handleCancelQueued}
         />
+
+        {(todosBySession.get(activeSessionId)?.length ?? 0) > 0 && (
+          <TodoList items={todosBySession.get(activeSessionId)!} />
+        )}
 
         {showHistory && (
           <div className="mypi-slash-popup" style={styles.overlay}>

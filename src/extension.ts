@@ -10,6 +10,7 @@ import { editTool } from './tools/edit';
 import { bashTool, setBashCwd } from './tools/bash';
 import { webFetchTool } from './tools/web-fetch';
 import { context7Tool } from './tools/context7';
+import { todoWriteTool } from './tools/todo';
 import { loadSkills } from './skills/loader';
 import { piAgentDir, resetHarnessCache, setBundledHarnessDir, setWorkspaceRoot } from './agent/system-prompt';
 import * as fs from 'fs';
@@ -39,6 +40,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     toolRegistry.register(bashTool);
     toolRegistry.register(webFetchTool);
     toolRegistry.register(context7Tool);
+    toolRegistry.register(todoWriteTool);
 
     const config = getConfig();
     setBundledHarnessDir(path.join(context.extensionPath, 'harness'));

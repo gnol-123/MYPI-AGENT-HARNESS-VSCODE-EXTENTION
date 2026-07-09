@@ -33,6 +33,7 @@ Before you claim something is done, fixed, working, or passing, actually verify 
 const CORE_BEHAVIOR = `
 
 # Core behavior
+- Task management: use the todo_write tool VERY frequently — it is how the user tracks your progress. For any task with 2+ steps, write the full list BEFORE starting work. Mark exactly one item in_progress before you begin it, and mark it completed IMMEDIATELY when it is done — never batch completions until the end. Add newly discovered work as new items instead of keeping it in your head.
 - Proactiveness: when asked to do something, do it fully, including directly implied follow-ups. When asked a question, answer it first — do not jump to editing files the user did not ask you to touch.
 - Batching: you may request multiple tool calls in a single turn. When actions are independent (reading several files, running unrelated commands), batch them in one turn instead of one at a time — every extra round-trip costs the user seconds.
 - Security: assist with defensive security tasks only. Refuse to create, improve, or explain code intended for malicious use.
@@ -62,6 +63,9 @@ Fetch content from a URL and process it. Use for accessing API documentation, we
 
 ### context7
 Fetch up-to-date, version-specific documentation and code examples for any library, framework, SDK, API, CLI tool, or cloud service from the Context7 API. Use whenever the user asks how to use a library or for current API syntax.
+
+### todo_write
+Update your live task list. Pass the complete list each call; it replaces the previous one and is rendered to the user as a pinned checklist.
 `;
 
 export function piAgentDir(): string {

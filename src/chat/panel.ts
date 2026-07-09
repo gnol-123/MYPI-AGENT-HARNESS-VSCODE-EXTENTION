@@ -4,6 +4,7 @@ import { LLMEvent, ThinkingEffort } from '../providers/types';
 import { setBashCwd } from '../tools/bash';
 import { SessionManager, Session } from './session-manager';
 import { costUsd, contextWindowFor } from '../pricing';
+import { parseTodos } from '../tools/todo';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   public static currentProvider: ChatViewProvider | undefined;
@@ -136,6 +137,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     let writingLabelSent = false;
     let thinkingLabelSent = false;
     let foundFlashSent = false;
+    // todo_write calls render as the checklist, not tool cards; remember their
+    // ids so their tool_results don't try to resolve a card that never existed.
+    const todoCallIds = new Set<string>();
 
     // Stage timing: "it's slow" is only fixable when we can see WHICH stage is
     // slow. Every turn logs first-byte latency to the "MYPI Perf" output channel.
@@ -158,6 +162,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             this.postMessage({ type: 'statusDot', state: 'working', label: 'Thinking...', sessionId: session.id });
             break;
           case 'tool_use_start':
+            // Writing the plan is not "finding the solution" — don't burn the
+            // green flash on todo_write.
+            if (event.name === 'todo_write') {
+              this.postMessage({ type: 'statusDot', state: 'working', label: 'Planning tasks...', sessionId: session.id });
+              break;
+            }
             // First tool of the run keeps the "Found solution!" green flash the
             // __FOUND_SOLUTION__ text sentinel used to deliver (removed: it
             // polluted the text event channel and every text-event consumer
@@ -215,6 +225,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             break;
           }
           case 'tool_use':
+            // todo_write renders as the pinned checklist, not a tool card.
+            if (event.name === 'todo_write') {
+              todoCallIds.add(event.id);
+              const items = parseTodos(event.input);
+              if (items) {
+                this.postMessage({ type: 'todos', items, sessionId: session.id });
+                this.postMessage({ type: 'statusDot', state: 'working', label: 'Updating tasks...', sessionId: session.id });
+              }
+              break;
+            }
             this.postMessage({
               type: 'toolCallStart',
               id: event.id,
@@ -228,6 +248,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             // The next model turn's request goes out right after the last tool
             // result, so this is the reference point for its first-byte time.
             turnStart = Date.now();
+            // todo_write has no tool card to resolve.
+            if (todoCallIds.has(event.id)) break;
             this.postMessage({
               type: 'toolCallResult',
               id: event.id,
@@ -363,6 +385,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         const sessionId = message.sessionId as string;
         this.sessionManager.clear(sessionId);
         this.sessionQueues.delete(sessionId);
+        this.postMessage({ type: 'todos', items: [], sessionId });
         this.sendSessionsList();
         break;
       }

@@ -133,6 +133,17 @@ export interface ThinkingEffortMsg {
   effort: 'low' | 'medium' | 'high';
 }
 
+export interface TodoItem {
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
+export interface TodosMsg {
+  type: 'todos';
+  sessionId: string;
+  items: TodoItem[];
+}
+
 export type HostToWebview = AssistantStreamChunk | ToolCallStart | ToolCallResult | AgentError | AgentDone | SessionsList | SessionMessages | PrefillPrompt | AgentStatus
   | ThinkingChunk
   | SessionUsageMsg
@@ -141,7 +152,8 @@ export type HostToWebview = AssistantStreamChunk | ToolCallStart | ToolCallResul
   | NetworkErrorMsg
   | NetworkReconnectedMsg
   | QueueStatusMsg
-  | ThinkingEffortMsg;
+  | ThinkingEffortMsg
+  | TodosMsg;
 export type WebviewToHost = UserMessage | { type: 'cancelRequest'; sessionId: string } | { type: 'runCommand'; command: string } | { type: 'switchSession'; sessionId: string } | { type: 'newSession' } | { type: 'deleteSession'; sessionId: string } | { type: 'switchModel'; model: string } | { type: 'setCwd'; cwd: string } | { type: 'clearSession'; sessionId: string } | { type: 'retryPrompt'; sessionId: string; text: string } | { type: 'setThinkingEffort'; effort: 'low' | 'medium' | 'high' } | { type: 'webviewReady' };
 
 export interface Message {
