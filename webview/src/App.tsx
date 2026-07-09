@@ -1,6 +1,6 @@
 /// <reference types="vscode-webview" />
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ChatView } from './ChatView';
 import { InputBox } from './InputBox';
 import { Message, HostToWebview, SessionInfo, SessionUsage, AgentDotState } from './types';
@@ -604,6 +604,28 @@ export const App: React.FC = () => {
           if (msg.label) {
             setDotLabelBySession((prev) => new Map(prev).set(msg.sessionId, msg.label));
           }
+          // Found state: auto-revert to working after 3 seconds
+          if (msg.state === 'found') {
+            if (foundTimerRef.current) clearTimeout(foundTimerRef.current);
+            foundTimerRef.current = setTimeout(() => {
+              setDotStateBySession((prev) => {
+                const current = prev.get(msg.sessionId);
+                if (current === 'found') {
+                  const next = new Map(prev);
+                  next.set(msg.sessionId, 'working');
+                  return next;
+                }
+                return prev;
+              });
+              setDotLabelBySession((prev) => {
+                const next = new Map(prev);
+                if (next.get(msg.sessionId) !== 'working') {
+                  next.set(msg.sessionId, 'Working...');
+                }
+                return next;
+              });
+            }, 3000);
+          }
           break;
 
         case 'toolCallResult':
@@ -786,10 +808,14 @@ export const App: React.FC = () => {
     vscodeApi.postMessage({ type: 'webviewReady' });
   }, []);
 
+  // Timer ref: auto-revert found → working after 3 seconds
+  const foundTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const getDotColor = (state: AgentDotState): string => {
     switch (state) {
       case 'working': return '#f9e2af';
       case 'found': return '#a6e3a1';
+      case 'issue': return '#f0a040';
       case 'done': return '#a6e3a1';
       case 'failed': return '#f38ba8';
       default: return '#6c7086';
@@ -800,6 +826,7 @@ export const App: React.FC = () => {
     switch (state) {
       case 'working': return 'statusWorking 1.2s ease-in-out infinite';
       case 'found': return 'statusFound 0.35s ease-in-out infinite';
+      case 'issue': return 'statusWorking 0.8s ease-in-out infinite';
       case 'done':
       case 'failed':
       case 'idle':

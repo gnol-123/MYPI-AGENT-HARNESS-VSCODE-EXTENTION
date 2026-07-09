@@ -87,7 +87,7 @@ export interface PrefillPrompt {
   text: string;
 }
 
-export type AgentDotState = 'idle' | 'working' | 'found' | 'done' | 'failed';
+export type AgentDotState = 'idle' | 'working' | 'found' | 'issue' | 'done' | 'failed';
 
 export interface StatusDotMsg {
   type: 'statusDot';

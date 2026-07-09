@@ -180,8 +180,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               isError: event.isError,
               sessionId: session.id,
             });
-            // Send found-solution signal on first successful tool result
-            this.postMessage({ type: 'statusDot', state: 'found', label: 'Found solution!', sessionId: session.id });
+            // Orange blinking for errors, green flash for success
+            if (event.isError) {
+              this.postMessage({ type: 'statusDot', state: 'issue', label: 'Issue encountered', sessionId: session.id });
+            } else {
+              this.postMessage({ type: 'statusDot', state: 'found', label: 'Found solution!', sessionId: session.id });
+            }
             break;
           case 'error':
             this.postMessage({

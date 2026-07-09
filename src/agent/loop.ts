@@ -5,7 +5,7 @@ import { Skill } from '../skills/loader';
 import { buildSystemPrompt } from './system-prompt';
 import { setBashCwd, getBashCwd } from '../tools/bash';
 
-const MAX_TOOL_ITERATIONS = 25;
+const MAX_TOOL_ITERATIONS = 50;
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 1000;
 
