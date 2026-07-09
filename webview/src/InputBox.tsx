@@ -306,7 +306,7 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableM
   return (
     <div style={styles.wrapper}>
       {showCommands && filteredCommands.length > 0 && (
-        <div style={styles.popup} ref={popupRef}>
+        <div className="mypi-slash-popup" style={styles.popup} ref={popupRef}>
           <div style={styles.popupHeader}>Commands</div>
           {filteredCommands.map((cmd, i) => (
             <div
@@ -325,7 +325,7 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableM
         </div>
       )}
       {showModels && filteredModels.length > 0 && (
-        <div style={styles.popup} ref={popupRef}>
+        <div className="mypi-slash-popup" style={styles.popup} ref={popupRef}>
           <div style={styles.popupHeader}>Switch Model {currentModel ? `(current: ${currentModel})` : ''}</div>
           {filteredModels.map((model, i) => (
             <div
@@ -351,6 +351,7 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableM
       <div style={styles.container}>
         <textarea
           ref={textareaRef}
+          className="mypi-input"
           style={styles.input}
           value={text}
           onChange={handleChange}
@@ -361,6 +362,7 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableM
           rows={1}
         />
         <button
+          className="mypi-send-btn"
           style={{
             ...styles.sendButton,
             ...(disabled ? styles.sendButtonDisabled : {}),

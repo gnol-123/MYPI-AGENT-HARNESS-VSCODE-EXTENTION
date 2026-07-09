@@ -1,6 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { Message } from './types';
-import { ToolCard } from './ToolCard';
+import React, { useRef, useEffect, useState } from 'react';
+import { Message, ToolCallEntry } from './types';
 
 interface ChatViewProps {
   messages: Message[];
@@ -8,41 +7,27 @@ interface ChatViewProps {
   isLoading: boolean;
 }
 
+const COLORS: Record<string, string> = {
+  read: '#89b4fa',
+  write: '#a6e3a1',
+  edit: '#f9e2af',
+  bash: '#94e2d5',
+  context7: '#cba6f7',
+};
+
 const styles: Record<string, React.CSSProperties> = {
   container: {
     flex: 1,
     overflowY: 'auto',
-    padding: '8px',
-  },
-  message: {
-    marginBottom: '12px',
-    padding: '6px 8px',
-    borderRadius: '4px',
-    maxWidth: '100%',
-  },
-  userMessage: {
-    background: 'var(--vscode-textBlockQuote-background)',
-  },
-  assistantMessage: {
-    background: 'transparent',
-  },
-  role: {
-    fontSize: '11px',
-    fontWeight: 600,
-    marginBottom: '2px',
-    color: 'var(--vscode-descriptionForeground)',
-    textTransform: 'uppercase' as const,
-  },
-  content: {
-    fontSize: '13px',
-    lineHeight: '1.5',
-    whiteSpace: 'pre-wrap' as const,
-    wordBreak: 'break-word' as const,
+    padding: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
   },
   streaming: {
-    padding: '6px 8px',
-    fontSize: '13px',
-    lineHeight: '1.5',
+    padding: '4px 0',
+    fontSize: '12.5px',
+    lineHeight: '1.55',
     color: 'var(--vscode-foreground)',
   },
   emptyState: {
@@ -57,14 +42,31 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column' as const,
     gap: '8px',
   },
-  loadingDot: {
-    display: 'inline-block',
-    width: '6px',
-    height: '6px',
-    borderRadius: '50%',
-    background: 'var(--vscode-descriptionForeground)',
-    marginLeft: '2px',
-  },
+};
+
+const ToolCardComponent: React.FC<{ tc: ToolCallEntry }> = ({ tc }) => {
+  const [expanded, setExpanded] = useState(false);
+  const color = COLORS[tc.name] ?? '#888';
+
+  const paramsStr = Object.entries(tc.params)
+    .map(([k, v]) => `${k}=${typeof v === 'string' ? v.slice(0, 40) : JSON.stringify(v).slice(0, 40)}`)
+    .join(', ');
+
+  return (
+    <div className={`mypi-tool-card ${!tc.result ? 'executing' : ''}`}>
+      <div className="mypi-tool-header" onClick={() => setExpanded(!expanded)}>
+        <span className={`mypi-tool-dot ${tc.name}`} style={{ background: color, color }}></span>
+        <span className={`mypi-tool-name ${tc.name}`} style={{ color }}>{tc.name}</span>
+        <span className="mypi-tool-params">{paramsStr}</span>
+        <span style={{ marginLeft: 'auto', fontSize: '9px', color: 'var(--vscode-descriptionForeground)' }}>
+          {expanded ? '▼' : '▶'}
+        </span>
+      </div>
+      {expanded && tc.result !== undefined && (
+        <div className="mypi-tool-result">{tc.result || '(no output)'}</div>
+      )}
+    </div>
+  );
 };
 
 export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isLoading }) => {
@@ -85,26 +87,30 @@ export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isL
 
       {messages.map((msg) => (
         <div key={msg.id}>
-          <div
-            style={{
-              ...styles.message,
-              ...(msg.role === 'user' ? styles.userMessage : styles.assistantMessage),
-            }}
-          >
-            <div style={styles.role}>{msg.role}</div>
-            <div style={styles.content}>{msg.content}</div>
-          </div>
+          {msg.role === 'user' ? (
+            <div className="mypi-msg-user">
+              <div className="mypi-role">You</div>
+              {msg.content}
+            </div>
+          ) : (
+            <div className="mypi-msg-assistant">
+              <div className="mypi-role">MYPI</div>
+              {msg.content}
+            </div>
+          )}
           {msg.toolCalls?.map((tc) => (
-            <ToolCard key={tc.id} id={tc.id} name={tc.name} params={tc.params} result={tc.result} />
+            <ToolCardComponent key={tc.id} tc={tc} />
           ))}
         </div>
       ))}
 
       {streamingText && (
         <div style={styles.streaming}>
-          <div style={styles.role}>ASSISTANT</div>
+          <div className="mypi-role" style={{ color: '#cba6f7' }}>MYPI</div>
           {streamingText}
-          {isLoading && <span style={styles.loadingDot} />}
+          {isLoading && (
+            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: 'var(--vscode-descriptionForeground)', marginLeft: '3px', animation: 'toolPulse 1s ease-in-out infinite' }} />
+          )}
         </div>
       )}
 

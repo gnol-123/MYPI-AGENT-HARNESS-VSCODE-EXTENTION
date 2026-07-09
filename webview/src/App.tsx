@@ -313,7 +313,7 @@ export const App: React.FC = () => {
       <style>{'.tab:hover .tab-close-btn { opacity: 0.6 !important; } .tab-close-btn:hover { opacity: 1 !important; color: #f38ba8 !important; }'}</style>
       <div style={styles.main}>
         {needsApiKey && messages.length === 0 && !streamingText && (
-          <div style={styles.setupBanner}>
+          <div className="mypi-welcome" style={styles.setupBanner}>
             <div style={styles.setupTitle}>Welcome to MYPI-by-SL</div>
             <div style={styles.setupText}>
               Set your API key to start using the AI coding agent.
@@ -330,7 +330,10 @@ export const App: React.FC = () => {
         />
         {agentStatus.cwd && (
           <div style={styles.statusBar}>
-            <span style={styles.statusItem} title={agentStatus.cwd}>{agentStatus.cwd}</span>
+            <span style={styles.statusItem} title={agentStatus.cwd}>
+              <span className="mypi-status-dot"></span>
+              {agentStatus.cwd}
+            </span>
             <span style={styles.statusItem}>{agentStatus.provider} · {agentStatus.model}</span>
             <span style={styles.statusItem}>
               {agentStatus.tokenUsage.inputTokens + agentStatus.tokenUsage.outputTokens > 0
