@@ -14,6 +14,7 @@ function convertMessages(messages: Message[]): Array<Record<string, unknown>> {
       result.push({ role: msg.role, content: msg.content });
     } else {
       const toolCalls: Array<Record<string, unknown>> = [];
+      const toolResults: Array<Record<string, unknown>> = [];
       const textParts: string[] = [];
 
       for (const part of msg.content) {
@@ -29,7 +30,7 @@ function convertMessages(messages: Message[]): Array<Record<string, unknown>> {
             },
           });
         } else if (part.type === 'tool_result') {
-          result.push({
+          toolResults.push({
             role: 'tool',
             tool_call_id: part.tool_use_id,
             content: part.content ?? '',
@@ -43,6 +44,10 @@ function convertMessages(messages: Message[]): Array<Record<string, unknown>> {
           content: textParts.join('\n') || null,
           tool_calls: toolCalls,
         });
+        // Tool results must come AFTER the assistant message with tool_calls
+        for (const tr of toolResults) {
+          result.push(tr);
+        }
       } else if (textParts.length > 0) {
         result.push({ role: msg.role, content: textParts.join('\n') });
       }

@@ -180,6 +180,10 @@ export const App: React.FC = () => {
     vscodeApi.postMessage({ type: 'switchSession', sessionId });
   }, []);
 
+  const switchModel = useCallback((model: string) => {
+    vscodeApi.postMessage({ type: 'switchModel', model });
+  }, []);
+
   const deleteSession = useCallback((sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     vscodeApi.postMessage({ type: 'deleteSession', sessionId });
@@ -335,7 +339,7 @@ export const App: React.FC = () => {
             </span>
           </div>
         )}
-        <InputBox onSend={sendMessage} disabled={isLoading} availableModels={agentStatus.availableModels} currentModel={agentStatus.model} />
+        <InputBox onSend={sendMessage} disabled={isLoading} availableModels={agentStatus.availableModels} currentModel={agentStatus.model} onSwitchModel={switchModel} />
       </div>
     </div>
   );

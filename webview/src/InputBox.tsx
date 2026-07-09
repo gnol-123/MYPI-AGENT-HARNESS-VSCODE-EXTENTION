@@ -2,8 +2,6 @@
 
 import React, { useState, useRef, useCallback, KeyboardEvent, useEffect } from 'react';
 
-const vscodeApi = acquireVsCodeApi();
-
 interface SlashCommand {
   command: string;
   label: string;
@@ -29,6 +27,7 @@ interface InputBoxProps {
   disabled: boolean;
   availableModels: string[];
   currentModel: string;
+  onSwitchModel: (model: string) => void;
 }
 
 const styles: Record<string, React.CSSProperties> = {
@@ -245,7 +244,7 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableM
         if (filteredModels[selectedModelIndex]) {
           e.preventDefault();
           const selectedModel = filteredModels[selectedModelIndex];
-          vscodeApi.postMessage({ type: 'switchModel', model: selectedModel });
+          onSwitchModel(selectedModel);
           setShowModels(false);
           setText('');
         }
@@ -337,7 +336,7 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableM
                 ...(model === currentModel ? { fontWeight: 600 } : {}),
               }}
               onClick={() => {
-                vscodeApi.postMessage({ type: 'switchModel', model });
+                onSwitchModel(model);
                 setShowModels(false);
                 setText('');
               }}

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" fill="none">
-  <!-- Minimal cat head silhouette -->
-  <path d="M6 10 L9 3 L13 9 L15 9 L19 3 L22 10 C24 12 25 15 25 18 C25 22 22 25 18 25 L10 25 C6 25 3 22 3 18 C3 15 4 12 6 10Z" 
-    fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+  <path d="M5 19 C5 13 8 10 14 10 C20 10 23 13 23 19 C23 24 19 25 14 25 C9 25 5 24 5 19Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+  <path d="M8 14 L11 5 L14 12" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+  <path d="M20 14 L17 5 L14 12" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
 </svg>
