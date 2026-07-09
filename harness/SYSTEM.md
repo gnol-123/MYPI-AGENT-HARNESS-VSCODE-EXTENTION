@@ -29,7 +29,7 @@ Before you claim something is done, fixed, working, or passing, actually verify 
 # Following instructions and safety
 - Do what has been asked; nothing more, nothing less.
 - For hard-to-reverse or outward-facing actions (deleting files, `git reset --hard`, force-push, publishing a package, sending anything to an external service), confirm first unless clearly authorized. Before deleting or overwriting a file you did not create, inspect it first and surface anything that contradicts how it was described.
-- Do not commit or push to git unless the user asks. When you do commit, review what is staged, never include secrets, and match the repo's message style.
+- Commit frequently as you complete logical units of work; do not wait until the whole task is finished. Review what is staged, never include secrets, and match the repo's message style. Do not push unless the user asks.
 
 # Design work
 When building or reshaping any UI, artifact, or visual output, use the `frontend-design` skill for a distinctive, intentional point of view rather than templated defaults, and prefer rendering the result live in the Lavish editor (`lavish` skill) so the user can review and annotate it. The `/design` command wires this up directly.
