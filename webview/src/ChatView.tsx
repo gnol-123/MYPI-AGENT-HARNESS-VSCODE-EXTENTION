@@ -7,6 +7,7 @@ interface ChatViewProps {
   isLoading: boolean;
   waiting: boolean;
   thinking: boolean;
+  thinkingText: string;
 }
 
 const COLORS: Record<string, string> = {
@@ -92,7 +93,7 @@ const ToolCardComponent: React.FC<{ tc: ToolCallEntry }> = ({ tc }) => {
   );
 };
 
-export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isLoading, waiting, thinking }) => {
+export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isLoading, waiting, thinking, thinkingText }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -136,6 +137,22 @@ export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isL
             <span className="mypi-typing-dot" />
             <span className="mypi-typing-label">{thinking ? 'thinking' : 'queued'}</span>
           </div>
+          {thinking && thinkingText && (
+            <div className="mypi-thinking-block" style={{
+              marginTop: '4px',
+              marginLeft: '4px',
+              borderLeft: '2px solid rgba(203,166,247,0.4)',
+              padding: '4px 8px',
+              fontSize: '11px',
+              fontStyle: 'italic',
+              color: 'var(--vscode-descriptionForeground)',
+              maxHeight: '180px',
+              overflowY: 'auto',
+              opacity: 0.8,
+              lineHeight: '1.45',
+              whiteSpace: 'pre-wrap',
+            }}>{thinkingText}</div>
+          )}
         </div>
       )}
 

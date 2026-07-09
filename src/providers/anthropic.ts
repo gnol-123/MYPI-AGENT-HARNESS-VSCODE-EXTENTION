@@ -4,7 +4,10 @@ import { LLMProvider, LLMEvent, Message, ToolDef } from './types';
 interface AnthropicConfig {
   apiKey: string;
   model: string;
+  thinkingLevel?: 'off' | 'low' | 'medium' | 'high';
 }
+
+const THINKING_BUDGETS = { low: 2048, medium: 4096, high: 8192 } as const;
 
 export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
   const client = new Anthropic({ apiKey: config.apiKey });
@@ -42,9 +45,16 @@ export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
               }),
         }));
 
+        const level = config.thinkingLevel ?? 'off';
+        const thinking = level !== 'off'
+          ? { type: 'enabled' as const, budget_tokens: THINKING_BUDGETS[level] }
+          : undefined;
+
         const stream = client.messages.stream({
           model: config.model,
-          max_tokens: maxTokens,
+          // Anthropic requires max_tokens to exceed the thinking budget.
+          max_tokens: thinking ? Math.max(maxTokens, thinking.budget_tokens + 4096) : maxTokens,
+          ...(thinking ? { thinking } : {}),
           system: systemPrompt,
           messages: convertedMessages as any,
           tools: tools.map((t) => ({
@@ -57,6 +67,8 @@ export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
         for await (const event of stream) {
           if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
             yield { type: 'text', text: event.delta.text };
+          } else if (event.type === 'content_block_delta' && (event.delta as any).type === 'thinking_delta') {
+            yield { type: 'thinking', text: (event.delta as any).thinking ?? '' };
           }
         }
 

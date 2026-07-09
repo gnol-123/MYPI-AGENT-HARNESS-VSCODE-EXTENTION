@@ -42,6 +42,7 @@ export interface AgentDone {
 export interface ThinkingChunk {
   type: 'thinking';
   sessionId: string;
+  text: string;
 }
 
 export interface SessionUsage {

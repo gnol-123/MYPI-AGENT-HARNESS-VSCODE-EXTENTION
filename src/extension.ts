@@ -11,7 +11,7 @@ import { bashTool, setBashCwd } from './tools/bash';
 import { webFetchTool } from './tools/web-fetch';
 import { context7Tool } from './tools/context7';
 import { loadSkills } from './skills/loader';
-import { piAgentDir, resetHarnessCache } from './agent/system-prompt';
+import { piAgentDir, resetHarnessCache, setBundledHarnessDir } from './agent/system-prompt';
 import * as fs from 'fs';
 import { createAnthropicProvider } from './providers/anthropic';
 import { createOpenAICompatProvider } from './providers/openai-compat';
@@ -39,6 +39,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     toolRegistry.register(context7Tool);
 
     const config = getConfig();
+    setBundledHarnessDir(path.join(context.extensionPath, 'harness'));
+
+    // Context7 key: setting first (shippable), else env / ~/.pi/agent/context7-key.txt.
+    const c7Key = vscode.workspace.getConfiguration('mypi-by-sl').get<string>('context7ApiKey', '');
+    if (c7Key.trim()) {
+      process.env.CONTEXT7_API_KEY = c7Key.trim();
+    }
+
     // Parity with local PI: prefer the live skill library in ~/.pi/agent/skills,
     // fall back to the bundled snapshot.
     const piSkills = path.join(piAgentDir(), 'skills');
@@ -185,9 +193,15 @@ async function createAgentLoop(context: vscode.ExtensionContext, modelOverride?:
   const endpoint = config.apiEndpoint || preset.defaultEndpoint;
 
   if (config.provider === 'anthropic') {
-    provider = createAnthropicProvider({ apiKey, model });
+    provider = createAnthropicProvider({ apiKey, model, thinkingLevel: config.thinkingLevel });
   } else {
-    provider = createOpenAICompatProvider({ apiKey, model, baseUrl: endpoint });
+    provider = createOpenAICompatProvider({
+      apiKey,
+      model,
+      baseUrl: endpoint,
+      providerKey: config.provider,
+      thinkingLevel: config.thinkingLevel,
+    });
   }
 
   resetHarnessCache(); // pick up edits to ~/.pi/agent/SYSTEM.md / AGENTS.md

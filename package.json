@@ -2,7 +2,7 @@
   "name": "mypi-by-sl",
   "displayName": "MYPI-by-SL",
   "description": "Full AI coding agent inside VS Code - powered by SL's PI",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "sl",
   "engines": {
     "vscode": "^1.85.0"
@@ -122,6 +122,17 @@
           "type": "number",
           "default": 120,
           "description": "Maximum seconds for bash commands"
+        },
+        "mypi-by-sl.context7ApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Context7 API key for the docs tool (free key at context7.com/dashboard). Falls back to CONTEXT7_API_KEY env var or ~/.pi/agent/context7-key.txt"
+        },
+        "mypi-by-sl.thinkingLevel": {
+          "type": "string",
+          "default": "high",
+          "enum": ["off", "low", "medium", "high"],
+          "description": "Model reasoning effort (matches PI's defaultThinkingLevel). 'off' disables extended thinking"
         },
         "mypi-by-sl.skillsPath": {
           "type": "string",

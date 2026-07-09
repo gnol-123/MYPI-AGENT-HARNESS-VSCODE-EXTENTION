@@ -275,6 +275,7 @@ export const App: React.FC = () => {
   const [activeSessionId, setActiveSessionId] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [thinkingSessions, setThinkingSessions] = useState<Set<string>>(new Set());
+  const [thinkingBySession, setThinkingBySession] = useState<Map<string, string>>(new Map());
   const [usageBySession, setUsageBySession] = useState<Map<string, { usage: SessionUsage; contextPct: number }>>(new Map());
   const [showHelp, setShowHelp] = useState(false);
   const [agentStatus, setAgentStatus] = useState({ cwd: '', model: '', provider: '', tokenUsage: { inputTokens: 0, outputTokens: 0 }, availableModels: [] as string[] });
@@ -282,6 +283,7 @@ export const App: React.FC = () => {
   const streamingText = streamingBySession.get(activeSessionId) ?? '';
   const isLoading = streamingBySession.has(activeSessionId);
   const isThinking = thinkingSessions.has(activeSessionId);
+  const thinkingText = thinkingBySession.get(activeSessionId) ?? '';
   const activeUsage = usageBySession.get(activeSessionId);
 
   const sendMessage = useCallback((text: string) => {
@@ -293,6 +295,7 @@ export const App: React.FC = () => {
     };
     setMessages((prev) => [...prev, userMsg]);
     setStreamingBySession((prev) => new Map(prev).set(activeSessionId, ''));
+    setThinkingBySession((prev) => new Map(prev).set(activeSessionId, ''));
     setToolCallsBySession((prev) => new Map(prev).set(activeSessionId, new Map()));
     setNeedsApiKey(false);
 
@@ -348,6 +351,11 @@ export const App: React.FC = () => {
             next.delete(msg.sessionId);
             return next;
           });
+          setThinkingBySession((prev) => {
+            const next = new Map(prev);
+            next.delete(msg.sessionId);
+            return next;
+          });
           break;
 
         case 'thinking':
@@ -355,6 +363,12 @@ export const App: React.FC = () => {
             if (prev.has(msg.sessionId)) return prev;
             const next = new Set(prev);
             next.add(msg.sessionId);
+            return next;
+          });
+          setThinkingBySession((prev) => {
+            const next = new Map(prev);
+            const existing = next.get(msg.sessionId) ?? '';
+            next.set(msg.sessionId, existing + msg.text);
             return next;
           });
           break;
@@ -407,6 +421,11 @@ export const App: React.FC = () => {
           });
           setThinkingSessions((prev) => {
             const next = new Set(prev);
+            next.delete(msg.sessionId);
+            return next;
+          });
+          setThinkingBySession((prev) => {
+            const next = new Map(prev);
             next.delete(msg.sessionId);
             return next;
           });
@@ -547,6 +566,7 @@ export const App: React.FC = () => {
           isLoading={isLoading}
           waiting={isLoading && !streamingText}
           thinking={isThinking}
+          thinkingText={thinkingText}
         />
 
         {showHistory && (

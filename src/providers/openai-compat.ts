@@ -4,6 +4,9 @@ interface OpenAICompatConfig {
   apiKey: string;
   model: string;
   baseUrl: string;
+  /** Provider key ('z-ai', 'deepseek', ...) — reasoning params differ per API. */
+  providerKey?: string;
+  thinkingLevel?: 'off' | 'low' | 'medium' | 'high';
 }
 
 function convertMessages(messages: Message[]): Array<Record<string, unknown>> {
@@ -87,6 +90,13 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
           stream: true,
           stream_options: { include_usage: true },
         };
+
+        // Reasoning control, mirroring PI's defaultThinkingLevel.
+        // Z.AI and DeepSeek use `thinking: { type: enabled|disabled }`.
+        if (config.providerKey === 'z-ai' || config.providerKey === 'deepseek') {
+          const level = config.thinkingLevel ?? 'high';
+          body.thinking = { type: level === 'off' ? 'disabled' : 'enabled' };
+        }
 
         if (tools.length > 0) {
           body.tools = convertTools(tools);

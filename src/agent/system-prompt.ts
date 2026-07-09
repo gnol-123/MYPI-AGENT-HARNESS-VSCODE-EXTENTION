@@ -63,17 +63,31 @@ interface PiHarness {
 }
 
 let cachedHarness: PiHarness | undefined;
+let bundledHarnessDir: string | undefined;
+
+/** Called from activate() with <extension>/harness so shipped installs work without ~/.pi. */
+export function setBundledHarnessDir(dir: string): void {
+  bundledHarnessDir = dir;
+  cachedHarness = undefined;
+}
 
 /** Reads SYSTEM.md and AGENTS.md from ~/.pi/agent so MYPI runs the same harness as local PI. */
 export function loadPiHarness(): PiHarness {
   if (cachedHarness) return cachedHarness;
   const harness: PiHarness = {};
+  // Live ~/.pi/agent wins (the dev machine); bundled copies make shipped installs self-contained.
+  const sources = [piAgentDir(), bundledHarnessDir].filter((d): d is string => !!d);
   for (const [key, file] of [['system', 'SYSTEM.md'], ['agents', 'AGENTS.md']] as const) {
-    try {
-      const content = fs.readFileSync(path.join(piAgentDir(), file), 'utf-8').trim();
-      if (content) harness[key] = content;
-    } catch {
-      // File absent — fall back below.
+    for (const dir of sources) {
+      try {
+        const content = fs.readFileSync(path.join(dir, file), 'utf-8').trim();
+        if (content) {
+          harness[key] = content;
+          break;
+        }
+      } catch {
+        // Try the next source.
+      }
     }
   }
   cachedHarness = harness;

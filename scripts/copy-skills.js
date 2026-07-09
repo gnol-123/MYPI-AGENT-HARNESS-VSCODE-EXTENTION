@@ -31,3 +31,18 @@ function copyDir(src, dest) {
 
 copyDir(sourceDir, targetDir);
 console.log('Skills copied successfully.');
+
+// Bundle the PI harness files so the shipped extension is self-contained.
+// The Context7 API key is deliberately NOT copied — secrets never go in a vsix.
+const agentDir = path.join(process.env.HOME || process.env.USERPROFILE, '.pi', 'agent');
+const harnessDir = path.join(__dirname, '..', 'harness');
+fs.mkdirSync(harnessDir, { recursive: true });
+for (const file of ['SYSTEM.md', 'AGENTS.md']) {
+  const src = path.join(agentDir, file);
+  if (fs.existsSync(src)) {
+    fs.copyFileSync(src, path.join(harnessDir, file));
+    console.log(`Bundled harness/${file}`);
+  } else {
+    console.warn(`Harness source not found: ${src}`);
+  }
+}

@@ -7,6 +7,7 @@ export interface SLSConfig {
   maxTokens: number;
   toolTimeout: number;
   skillsPath: string;
+  thinkingLevel: 'off' | 'low' | 'medium' | 'high';
 }
 
 export interface ProviderPreset {
@@ -87,6 +88,7 @@ const DEFAULT_CONFIG: SLSConfig = {
   maxTokens: 8192,
   toolTimeout: 120,
   skillsPath: '',
+  thinkingLevel: 'off',
 };
 
 export function buildConfig(raw: Record<string, unknown>): SLSConfig {
@@ -97,5 +99,6 @@ export function buildConfig(raw: Record<string, unknown>): SLSConfig {
     maxTokens: (raw['mypi-by-sl.maxTokens'] as number) ?? DEFAULT_CONFIG.maxTokens,
     toolTimeout: (raw['mypi-by-sl.toolTimeout'] as number) ?? DEFAULT_CONFIG.toolTimeout,
     skillsPath: (raw['mypi-by-sl.skillsPath'] as string) ?? DEFAULT_CONFIG.skillsPath,
+    thinkingLevel: (raw['mypi-by-sl.thinkingLevel'] as SLSConfig['thinkingLevel']) ?? DEFAULT_CONFIG.thinkingLevel,
   };
 }

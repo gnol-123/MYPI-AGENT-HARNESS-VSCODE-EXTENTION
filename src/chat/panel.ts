@@ -129,7 +129,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             });
             break;
           case 'thinking':
-            this.postMessage({ type: 'thinking', sessionId: session.id });
+            this.postMessage({ type: 'thinking', sessionId: session.id, text: event.text });
             break;
           case 'usage': {
             const model = this.agentLoop!.getStatus().model;
