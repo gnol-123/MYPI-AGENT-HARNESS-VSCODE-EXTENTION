@@ -2,74 +2,130 @@
   "name": "mypi-by-sl",
   "displayName": "MYPI-by-SL",
   "description": "Full AI coding agent inside VS Code - powered by SL's PI",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "sl",
   "engines": {
     "vscode": "^1.85.0"
   },
-  "activationEvents": ["*"],
+  "activationEvents": [
+    "onView:mypi-by-sl.catChat",
+    "onCommand:mypi-by-sl.openChat",
+    "onCommand:mypi-by-sl.setApiKey",
+    "onCommand:mypi-by-sl.explainFile",
+    "onCommand:mypi-by-sl.explainSelection",
+    "onCommand:mypi-by-sl.fixSelection",
+    "onCommand:mypi-by-sl.refactorSelection"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      { "command": "mypi-by-sl.openChat", "title": "MYPI-by-SL: Open Chat" },
-      { "command": "mypi-by-sl.setApiKey", "title": "MYPI-by-SL: Set API Key" },
-      { "command": "mypi-by-sl.explainFile", "title": "MYPI-by-SL: Explain this file" },
-      { "command": "mypi-by-sl.explainSelection", "title": "MYPI-by-SL: Explain selection" },
-      { "command": "mypi-by-sl.fixSelection", "title": "MYPI-by-SL: Fix selection" },
-      { "command": "mypi-by-sl.refactorSelection", "title": "MYPI-by-SL: Refactor selection" }
+      {
+        "command": "mypi-by-sl.openChat",
+        "title": "MYPI-by-SL: Open Chat"
+      },
+      {
+        "command": "mypi-by-sl.setApiKey",
+        "title": "MYPI-by-SL: Set API Key"
+      },
+      {
+        "command": "mypi-by-sl.explainFile",
+        "title": "MYPI-by-SL: Explain this file"
+      },
+      {
+        "command": "mypi-by-sl.explainSelection",
+        "title": "MYPI-by-SL: Explain selection"
+      },
+      {
+        "command": "mypi-by-sl.fixSelection",
+        "title": "MYPI-by-SL: Fix selection"
+      },
+      {
+        "command": "mypi-by-sl.refactorSelection",
+        "title": "MYPI-by-SL: Refactor selection"
+      }
     ],
     "viewsContainers": {
-      "activitybar": [{
-        "id": "mypi-by-sl-sidebar",
-        "title": "MYPI-by-SL",
-        "icon": "assets/cat-icon.svg"
-      }]
+      "activitybar": [
+        {
+          "id": "mypi-cat-sidebar",
+          "title": "MYPI-by-SL",
+          "icon": "assets/cat-icon.svg"
+        }
+      ]
     },
     "views": {
-      "mypi-by-sl-sidebar": [{
-        "type": "webview",
-        "id": "mypi-by-sl.chatView",
-        "name": "Chat"
-      }]
+      "mypi-cat-sidebar": [
+        {
+          "type": "webview",
+          "id": "mypi-by-sl.catChat",
+          "name": "MYPI CODE"
+        }
+      ]
     },
     "menus": {
-      "explorer/context": [{
-        "command": "mypi-by-sl.explainFile",
-        "group": "mypi-by-sl",
-        "when": "resource"
-      }],
+      "explorer/context": [
+        {
+          "command": "mypi-by-sl.explainFile",
+          "group": "mypi-by-sl",
+          "when": "resource"
+        }
+      ],
       "editor/context": [
-        { "command": "mypi-by-sl.explainSelection", "group": "mypi-by-sl", "when": "editorHasSelection" },
-        { "command": "mypi-by-sl.fixSelection", "group": "mypi-by-sl", "when": "editorHasSelection" },
-        { "command": "mypi-by-sl.refactorSelection", "group": "mypi-by-sl", "when": "editorHasSelection" }
+        {
+          "command": "mypi-by-sl.explainSelection",
+          "group": "mypi-by-sl",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "mypi-by-sl.fixSelection",
+          "group": "mypi-by-sl",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "mypi-by-sl.refactorSelection",
+          "group": "mypi-by-sl",
+          "when": "editorHasSelection"
+        }
       ]
     },
     "configuration": {
       "title": "MYPI-by-SL",
       "properties": {
         "mypi-by-sl.provider": {
-          "type": "string", "default": "anthropic",
-          "enum": ["anthropic", "openai", "deepseek", "z-ai", "together"],
+          "type": "string",
+          "default": "anthropic",
+          "enum": [
+            "anthropic",
+            "openai",
+            "deepseek",
+            "z-ai",
+            "together"
+          ],
           "description": "LLM provider (Anthropic, OpenAI, DeepSeek, Z.AI, or Together AI)"
         },
         "mypi-by-sl.model": {
-          "type": "string", "default": "",
+          "type": "string",
+          "default": "",
           "description": "Model ID (leave empty for provider default)"
         },
         "mypi-by-sl.apiEndpoint": {
-          "type": "string", "default": "",
+          "type": "string",
+          "default": "",
           "description": "Override API base URL (leave empty for provider default)"
         },
         "mypi-by-sl.maxTokens": {
-          "type": "number", "default": 8192,
+          "type": "number",
+          "default": 8192,
           "description": "Maximum tokens per response"
         },
         "mypi-by-sl.toolTimeout": {
-          "type": "number", "default": 120,
+          "type": "number",
+          "default": 120,
           "description": "Maximum seconds for bash commands"
         },
         "mypi-by-sl.skillsPath": {
-          "type": "string", "default": "",
+          "type": "string",
+          "default": "",
           "description": "Override skill directory (empty = use bundled)"
         }
       }
