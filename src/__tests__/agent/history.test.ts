@@ -13,6 +13,19 @@ describe('ConversationHistory', () => {
     expect(messages[1].role).toBe('assistant');
   });
 
+  it('should round-trip through toJSON/fromJSON', () => {
+    const history = new ConversationHistory();
+    history.addUserMessage('read a file');
+    history.addAssistantMessage('reading', [
+      { id: 'tool_1', name: 'read', input: { path: 'a.ts' } },
+    ]);
+    history.addToolResult('tool_1', 'contents');
+    history.addAssistantMessage('done');
+
+    const restored = ConversationHistory.fromJSON(history.toJSON());
+    expect(restored.getMessages()).toEqual(history.getMessages());
+  });
+
   it('should add tool results', () => {
     const history = new ConversationHistory();
     history.addAssistantMessage('', [

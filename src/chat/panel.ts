@@ -27,6 +27,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private activeSessionId: string;
   private globalState: vscode.Memento | undefined;
   public onSwitchModel: ((model: string) => void) | undefined;
+  public onRequestAgentLoop: (() => Promise<AgentLoop | undefined>) | undefined;
 
   constructor(extensionUri: vscode.Uri) {
     this.extensionUri = extensionUri;
@@ -254,6 +255,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
       case 'userMessage': {
         const text = message.text as string;
+        if (!this.agentLoop && this.onRequestAgentLoop) {
+          await this.onRequestAgentLoop();
+        }
         if (!this.agentLoop) {
           this.postMessage({
             type: 'error',

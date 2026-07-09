@@ -48,10 +48,10 @@ export class AgentLoop {
   }
 
   async run(
+    history: ConversationHistory,
     userMessage: string,
     onEvent: (event: LLMEvent) => void,
   ): Promise<void> {
-    const history = new ConversationHistory();
     history.addUserMessage(userMessage);
 
     const systemPrompt = buildSystemPrompt(this.skills, userMessage);

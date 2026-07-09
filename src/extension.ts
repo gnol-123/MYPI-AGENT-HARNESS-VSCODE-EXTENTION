@@ -41,6 +41,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     chatProvider = new ChatViewProvider(context.extensionUri);
     chatProvider.setState(context.globalState);
+    chatProvider.onRequestAgentLoop = () => ensureAgentLoop(context);
     chatProvider.onSwitchModel = async (newModel: string) => {
       currentAgentLoop = undefined;
       const loop = await createAgentLoop(context, newModel);
@@ -50,7 +51,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     };
 
     context.subscriptions.push(
-      vscode.window.registerWebviewViewProvider('mypi-by-sl.chatView', chatProvider),
+      vscode.window.registerWebviewViewProvider('mypi-by-sl.catChat', chatProvider),
       vscode.commands.registerCommand('mypi-by-sl.openChat', () => openChat(context)),
       vscode.commands.registerCommand('mypi-by-sl.setApiKey', () => promptSetApiKey(context)),
       vscode.commands.registerCommand('mypi-by-sl.explainFile', (uri?: vscode.Uri) =>
@@ -85,6 +86,7 @@ async function ensureAgentLoop(context: vscode.ExtensionContext): Promise<AgentL
 
 async function openChat(context: vscode.ExtensionContext): Promise<void> {
   await ensureAgentLoop(context);
+  await vscode.commands.executeCommand('mypi-by-sl.catChat.focus');
 }
 
 async function contextAction(

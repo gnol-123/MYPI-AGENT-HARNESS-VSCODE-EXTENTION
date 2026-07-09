@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { AgentLoop } from '../../agent/loop';
+import { ConversationHistory } from '../../agent/history';
 import { ToolRegistry } from '../../tools/registry';
 import { LLMProvider, LLMEvent, ToolDef, Message } from '../../providers/types';
 import { Skill } from '../../skills/loader';
@@ -35,7 +36,7 @@ describe('AgentLoop', () => {
 
     const loop = new AgentLoop(provider, registry, skills, 8192, 'test-model', 'test-provider');
     const events: LLMEvent[] = [];
-    await loop.run('Hi', (event) => events.push(event));
+    await loop.run(new ConversationHistory(), 'Hi', (event) => events.push(event));
 
     expect(events.some((e) => e.type === 'text')).toBe(true);
     const status = loop.getStatus();
@@ -67,11 +68,32 @@ describe('AgentLoop', () => {
     const skills: Skill[] = [];
     const loop = new AgentLoop(provider, registry, skills, 8192, 'test-model', 'test-provider');
     const events: LLMEvent[] = [];
-    await loop.run('Read test.ts', (event) => events.push(event));
+    await loop.run(new ConversationHistory(), 'Read test.ts', (event) => events.push(event));
 
     const textEvents = events.filter((e) => e.type === 'text');
     expect(textEvents).toHaveLength(1);
     expect(textEvents[0].text).toBe('I read the file.');
+  });
+
+  it('should retain context across runs sharing one history', async () => {
+    const seenMessageCounts: number[] = [];
+    const provider: LLMProvider = {
+      async *streamChat(msgs: Message[]): AsyncGenerator<LLMEvent> {
+        seenMessageCounts.push(msgs.length);
+        yield { type: 'text', text: 'ok' };
+        yield { type: 'done' };
+      },
+    };
+    const registry = new ToolRegistry();
+    const skills: Skill[] = [];
+    const loop = new AgentLoop(provider, registry, skills, 8192);
+
+    const history = new ConversationHistory();
+    await loop.run(history, 'first question', () => {});
+    await loop.run(history, 'follow-up', () => {});
+
+    expect(seenMessageCounts[0]).toBe(1);
+    expect(seenMessageCounts[1]).toBe(3); // user, assistant, user
   });
 
   it('should handle errors from provider', async () => {
@@ -83,7 +105,7 @@ describe('AgentLoop', () => {
 
     const loop = new AgentLoop(provider, registry, skills, 8192, 'test-model', 'test-provider');
     const events: LLMEvent[] = [];
-    await loop.run('Hi', (event) => events.push(event));
+    await loop.run(new ConversationHistory(), 'Hi', (event) => events.push(event));
 
     const errorEvents = events.filter((e) => e.type === 'error');
     expect(errorEvents).toHaveLength(1);

@@ -64,4 +64,14 @@ export class ConversationHistory {
     this.messages = [];
     this.pendingToolCalls = [];
   }
+
+  toJSON(): Message[] {
+    return this.getMessages();
+  }
+
+  static fromJSON(messages: Message[]): ConversationHistory {
+    const history = new ConversationHistory();
+    history.messages = JSON.parse(JSON.stringify(messages));
+    return history;
+  }
 }
