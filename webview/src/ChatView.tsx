@@ -238,7 +238,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isL
         <div className="mypi-streaming">
           <div className="mypi-role" style={{ color: '#cba6f7' }}>MYPI</div>
           <div style={{ fontSize: '12.5px', color: 'var(--vscode-descriptionForeground)', fontStyle: 'italic', padding: '4px 0' }}>
-            {thinking ? 'thinking...' : 'queued...'}
+            {thinking ? 'thinking...' : isRunning ? 'starting...' : 'queued...'}
           </div>
           {thinking && thinkingText && (
             <div className="mypi-thinking-block">{thinkingText}</div>

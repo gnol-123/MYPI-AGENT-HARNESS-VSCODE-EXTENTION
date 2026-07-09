@@ -31,6 +31,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.postMessage({ type: 'thinkingEffort', effort });
   }
 
+  /** Called by extension.ts to set the agent loop and toggle thinking */
+  applyThinkingToProvider(effort: 'low' | 'medium' | 'high'): void {
+    // Access the underlying provider via agent loop
+    if (this.onToggleThinking) {
+      this.onToggleThinking(effort);
+    }
+  }
+
+  public onToggleThinking: ((effort: 'low' | 'medium' | 'high') => void) | undefined;
+
   setState(state: vscode.Memento): void {
     this.sessionManager = new SessionManager(state);
     this.sessionManager.load();
@@ -341,6 +351,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       case 'setThinkingEffort': {
         const effort = message.effort as 'low' | 'medium' | 'high';
         this.setThinkingEffort(effort);
+        this.applyThinkingToProvider(effort);
         break;
       }
 

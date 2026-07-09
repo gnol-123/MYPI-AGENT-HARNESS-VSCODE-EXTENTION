@@ -74,7 +74,12 @@ function convertTools(tools: ToolDef[]): Array<Record<string, unknown>> {
 }
 
 export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvider {
+  let thinkingEnabled = (config.thinkingLevel ?? 'medium') !== 'off';
+
   return {
+    setThinkingEnabled(enabled: boolean) {
+      thinkingEnabled = enabled;
+    },
     async *streamChat(
       messages: Message[],
       tools: ToolDef[],
@@ -92,11 +97,10 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
           stream: true,
         };
 
-        // Reasoning control, mirroring PI's defaultThinkingLevel.
+        // Reasoning control — uses the mutable thinkingEnabled toggle (set by UI effort buttons)
         // Z.AI and DeepSeek use `thinking: { type: enabled|disabled }`.
         if (config.providerKey === 'z-ai' || config.providerKey === 'deepseek') {
-          const level = config.thinkingLevel ?? 'high';
-          body.thinking = { type: level === 'off' ? 'disabled' : 'enabled' };
+          body.thinking = { type: thinkingEnabled ? 'enabled' : 'disabled' };
         }
 
         if (tools.length > 0) {

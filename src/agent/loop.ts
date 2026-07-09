@@ -55,6 +55,10 @@ export class AgentLoop {
     this.thinkingEffort = effort;
   }
 
+  setThinkingEnabled(enabled: boolean): void {
+    this.provider.setThinkingEnabled?.(enabled);
+  }
+
   abort(): void {
     if (this.abortController) {
       this.abortController.abort();

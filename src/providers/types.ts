@@ -36,4 +36,6 @@ export interface LLMProvider {
     systemPrompt: string,
     maxTokens: number,
   ): AsyncGenerator<LLMEvent>;
+  /** Enable or disable API-level chain-of-thought thinking */
+  setThinkingEnabled?(enabled: boolean): void;
 }

@@ -12,12 +12,16 @@ interface AnthropicConfig {
 const THINKING_BUDGETS = { low: 2048, medium: 4096, high: 8192 } as const;
 
 export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
+  let thinkingEnabled = (config.thinkingLevel ?? 'medium') !== 'off';
   const client = new Anthropic({
     apiKey: config.apiKey,
     timeout: config.timeoutMs ?? 120_000,
   });
 
   return {
+    setThinkingEnabled(enabled: boolean) {
+      thinkingEnabled = enabled;
+    },
     async *streamChat(
       messages: Message[],
       tools: ToolDef[],
@@ -50,9 +54,8 @@ export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
               }),
         }));
 
-        const level = config.thinkingLevel ?? 'off';
-        const thinking = level !== 'off'
-          ? { type: 'enabled' as const, budget_tokens: THINKING_BUDGETS[level] }
+        const thinking = thinkingEnabled
+          ? { type: 'enabled' as const, budget_tokens: THINKING_BUDGETS['medium'] }
           : undefined;
 
         let droppedThinking = false;

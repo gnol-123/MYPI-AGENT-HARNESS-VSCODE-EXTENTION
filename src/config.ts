@@ -11,7 +11,7 @@ function getVsCodeSettings(): Record<string, unknown> {
     'mypi-by-sl.maxTokens': config.get<number>('maxTokens', 8192),
     'mypi-by-sl.toolTimeout': config.get<number>('toolTimeout', 120),
     'mypi-by-sl.skillsPath': config.get<string>('skillsPath', ''),
-    'mypi-by-sl.thinkingLevel': config.get<string>('thinkingLevel', 'high'),
+    'mypi-by-sl.thinkingLevel': config.get<string>('thinkingLevel', 'medium'),
   };
 }
 

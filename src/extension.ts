@@ -62,6 +62,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         chatProvider.setAgentLoop(loop);
       }
     };
+    chatProvider.onToggleThinking = (effort: 'low' | 'medium' | 'high') => {
+      // Low effort = disable API-level chain-of-thought (fast, token-efficient)
+      currentAgentLoop?.setThinkingEnabled(effort !== 'low');
+    };
 
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider('mypi-by-sl.catChat', chatProvider),
