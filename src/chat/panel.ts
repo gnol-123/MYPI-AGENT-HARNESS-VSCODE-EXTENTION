@@ -80,6 +80,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.view?.webview.postMessage(message);
   }
 
+  private perfChannel: vscode.OutputChannel | undefined;
+
+  /** Stage-timing log ("MYPI Perf" output channel) for diagnosing latency. */
+  private perf(line: string): void {
+    if (!this.perfChannel) {
+      this.perfChannel = vscode.window.createOutputChannel('MYPI Perf');
+    }
+    this.perfChannel.appendLine(`${new Date().toISOString()} ${line}`);
+  }
+
   private sendStatus(): void {
     if (this.agentLoop) {
       const status = this.agentLoop.getStatus();
@@ -126,6 +136,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     let writingLabelSent = false;
     let thinkingLabelSent = false;
 
+    // Stage timing: "it's slow" is only fixable when we can see WHICH stage is
+    // slow. Every turn logs first-byte latency to the "MYPI Perf" output channel.
+    const t0 = Date.now();
+    let turnStart = t0;
+    const histMsgs = session.history.getMessages();
+    const histChars = JSON.stringify(histMsgs).length;
+    this.perf(`[send] session=${session.id} historyMessages=${histMsgs.length} historyChars=${histChars}`);
+
     try {
       await this.agentLoop!.run(session.history, text, (event: LLMEvent) => {
         switch (event.type) {
@@ -133,6 +151,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             // First byte back from the model. Replaces the webview's optimistic
             // "Starting..." even when the turn is a tool call with no text.
             // Fires once per turn, so it also resets the per-turn label latches.
+            this.perf(`[first-byte] +${Date.now() - turnStart}ms (t+${Date.now() - t0}ms total)`);
             writingLabelSent = false;
             thinkingLabelSent = false;
             this.postMessage({ type: 'statusDot', state: 'working', label: 'Thinking...', sessionId: session.id });
@@ -165,6 +184,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             }
             break;
           case 'usage': {
+            this.perf(`[usage] in=${event.inputTokens} out=${event.outputTokens} cacheRead=${event.cacheReadTokens ?? 0} cacheWrite=${event.cacheWriteTokens ?? 0}`);
             // Price at the model that served this request, not whatever is
             // selected later — switching models mid-session must not reprice
             // earlier requests.
@@ -199,6 +219,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             this.postMessage({ type: 'statusDot', state: 'working', label: `Running ${event.name}...`, sessionId: session.id });
             break;
           case 'tool_result':
+            // The next model turn's request goes out right after the last tool
+            // result, so this is the reference point for its first-byte time.
+            turnStart = Date.now();
             this.postMessage({
               type: 'toolCallResult',
               id: event.id,
@@ -257,6 +280,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
       this.sessionManager.addMessage(session.id, 'assistant', finalContent);
     }
+    this.perf(`[done] total ${Date.now() - t0}ms`);
     this.postMessage({
       type: 'done',
       turnId: Date.now().toString(),

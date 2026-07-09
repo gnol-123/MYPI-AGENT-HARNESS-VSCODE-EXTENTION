@@ -2,8 +2,12 @@
   "name": "mypi-by-sl",
   "displayName": "MYPI-by-SL",
   "description": "Full AI coding agent inside VS Code - powered by SL's PI",
-  "version": "0.3.1",
+  "version": "0.3.13",
   "publisher": "sl",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/mypi-by-sl"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -148,13 +152,14 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run copy-skills && npm run compile && npm run build-webview",
+    "vscode:prepublish": "npm run compile && npm run build-webview",
     "compile": "tsc -p ./tsconfig.json",
     "watch": "tsc -watch -p ./tsconfig.json",
     "build-webview": "node esbuild.js",
     "lint": "eslint src --ext ts",
     "test": "vitest run",
-    "copy-skills": "node scripts/copy-skills.js"
+    "copy-skills:dev": "set MYPI_DEV=1 && node scripts/copy-skills.js",
+    "package": "vsce package"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
