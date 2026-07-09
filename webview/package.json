@@ -5,6 +5,8 @@
     "build": "node ../esbuild.js"
   },
   "dependencies": {
+    "highlight.js": "^11.11.1",
+    "marked": "^18.0.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

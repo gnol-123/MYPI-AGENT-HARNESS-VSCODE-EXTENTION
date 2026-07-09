@@ -1,5 +1,13 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
+import { marked } from 'marked';
+import hljs from 'highlight.js';
 import { Message, ToolCallEntry } from './types';
+
+// Configure marked with highlight.js
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+});
 
 interface ChatViewProps {
   messages: Message[];
@@ -26,12 +34,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: '4px',
-  },
-  streaming: {
-    padding: '4px 0',
-    fontSize: '12.5px',
-    lineHeight: '1.55',
-    color: 'var(--vscode-foreground)',
   },
   emptyState: {
     display: 'flex',
@@ -93,15 +95,37 @@ const ToolCardComponent: React.FC<{ tc: ToolCallEntry }> = ({ tc }) => {
   );
 };
 
+/** Render markdown to HTML, highlighting code blocks. */
+function renderMarkdown(text: string): string {
+  return marked.parse(text, {
+    highlight: (code, lang) => {
+      if (lang && hljs.getLanguage(lang)) {
+        try {
+          return hljs.highlight(code, { language: lang }).value;
+        } catch {}
+      }
+      return hljs.highlightAuto(code).value;
+    },
+  }) as string;
+}
+
 export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isLoading, waiting, thinking, thinkingText }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll on any content change: messages, streaming, thinking
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingText, waiting]);
+  }, [messages, streamingText, thinkingText, waiting]);
+
+  // Render streaming preview as markdown
+  const streamingHtml = useMemo(() => {
+    if (!streamingText) return '';
+    return renderMarkdown(streamingText);
+  }, [streamingText]);
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} ref={containerRef}>
       {messages.length === 0 && !streamingText && (
         <div style={styles.emptyState}>
           <div style={styles.emptyLogo}>MYPI</div>
@@ -119,7 +143,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isL
           ) : (
             <div className="mypi-msg-assistant">
               <div className="mypi-role">MYPI</div>
-              {msg.content}
+              <div
+                className="mypi-md-content"
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
+              />
             </div>
           )}
           {msg.toolCalls?.map((tc) => (
@@ -128,8 +155,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isL
         </div>
       ))}
 
+      {/* Waiting/thinking indicator — thinking text flows inline, no separate scrollbox */}
       {waiting && (
-        <div style={styles.streaming}>
+        <div className="mypi-streaming">
           <div className="mypi-role" style={{ color: '#cba6f7' }}>MYPI</div>
           <div className="mypi-typing">
             <span className="mypi-typing-dot" />
@@ -138,30 +166,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isL
             <span className="mypi-typing-label">{thinking ? 'thinking' : 'queued'}</span>
           </div>
           {thinking && thinkingText && (
-            <div className="mypi-thinking-block" style={{
-              marginTop: '4px',
-              marginLeft: '4px',
-              borderLeft: '2px solid rgba(203,166,247,0.4)',
-              padding: '4px 8px',
-              fontSize: '11px',
-              fontStyle: 'italic',
-              color: 'var(--vscode-descriptionForeground)',
-              maxHeight: '180px',
-              overflowY: 'auto',
-              opacity: 0.8,
-              lineHeight: '1.45',
-              whiteSpace: 'pre-wrap',
-            }}>{thinkingText}</div>
+            <div className="mypi-thinking-block">{thinkingText}</div>
           )}
         </div>
       )}
 
+      {/* Streaming text rendered as markdown */}
       {streamingText && (
-        <div style={styles.streaming}>
+        <div className="mypi-streaming">
           <div className="mypi-role" style={{ color: '#cba6f7' }}>MYPI</div>
-          {streamingText}
+          <div
+            className="mypi-md-content"
+            dangerouslySetInnerHTML={{ __html: streamingHtml }}
+          />
           {isLoading && (
-            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: 'var(--vscode-descriptionForeground)', marginLeft: '3px', animation: 'toolPulse 1s ease-in-out infinite' }} />
+            <span className="mypi-cursor-blink" />
           )}
         </div>
       )}

@@ -377,6 +377,100 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     .mypi-tool-params { color: var(--vscode-descriptionForeground); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; font-family: var(--vscode-editor-font-family, monospace); }
     .mypi-tool-result { margin-top: 4px; padding: 5px 7px; background: color-mix(in srgb, var(--vscode-textCodeBlock-background, #1e1e2e) 60%, transparent); border-radius: 3px; font-family: var(--vscode-editor-font-family, monospace); font-size: 10.5px; white-space: pre-wrap; word-break: break-all; max-height: 140px; overflow-y: auto; color: var(--vscode-descriptionForeground); line-height: 1.45; }
 
+    /* Streaming container */
+    .mypi-streaming { padding: 4px 0; font-size: 12.5px; line-height: 1.55; color: var(--vscode-foreground); }
+    .mypi-cursor-blink { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--vscode-descriptionForeground); margin-left: 3px; animation: toolPulse 1s ease-in-out infinite; vertical-align: middle; }
+
+    /* Thinking block — inline, no separate scrollbox */
+    .mypi-thinking-block {
+      margin: 4px 0 0 4px;
+      border-left: 2px solid rgba(203,166,247,0.4);
+      padding: 4px 8px;
+      font-size: 11px;
+      font-style: italic;
+      color: var(--vscode-descriptionForeground);
+      opacity: 0.85;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Markdown content styles */
+    .mypi-md-content p { margin: 0.35em 0; }
+    .mypi-md-content p:first-child { margin-top: 0; }
+    .mypi-md-content p:last-child { margin-bottom: 0; }
+    .mypi-md-content strong { color: var(--vscode-foreground); font-weight: 600; }
+    .mypi-md-content em { color: var(--vscode-descriptionForeground); }
+    .mypi-md-content code {
+      background: var(--vscode-textCodeBlock-background, #313244);
+      color: var(--mypi-accent);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 11px;
+    }
+    .mypi-md-content pre {
+      background: var(--vscode-textCodeBlock-background, #313244);
+      border: 1px solid var(--vscode-input-border, #45475a);
+      border-radius: 6px;
+      padding: 12px;
+      margin: 8px 0;
+      overflow-x: auto;
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 11.5px;
+      line-height: 1.5;
+    }
+    .mypi-md-content pre code {
+      background: none;
+      color: var(--vscode-foreground);
+      padding: 0;
+      font-size: inherit;
+    }
+    .mypi-md-content ul, .mypi-md-content ol { padding-left: 20px; margin: 4px 0; }
+    .mypi-md-content li { margin: 2px 0; }
+    .mypi-md-content a { color: var(--mypi-blue); text-decoration: underline; text-underline-offset: 2px; }
+    .mypi-md-content blockquote {
+      border-left: 2px solid var(--mypi-accent);
+      margin: 6px 0;
+      padding: 2px 10px;
+      color: var(--vscode-descriptionForeground);
+    }
+    .mypi-md-content h1, .mypi-md-content h2, .mypi-md-content h3 {
+      font-weight: 600;
+      margin: 10px 0 4px;
+      color: var(--vscode-foreground);
+    }
+    .mypi-md-content h1 { font-size: 15px; }
+    .mypi-md-content h2 { font-size: 14px; }
+    .mypi-md-content h3 { font-size: 13px; }
+    .mypi-md-content hr { border: none; border-top: 1px solid var(--vscode-input-border); margin: 10px 0; }
+    .mypi-md-content table { border-collapse: collapse; margin: 8px 0; width: 100%; }
+    .mypi-md-content th, .mypi-md-content td {
+      border: 1px solid var(--vscode-input-border);
+      padding: 6px 10px;
+      text-align: left;
+      font-size: 12px;
+    }
+    .mypi-md-content th { background: color-mix(in srgb, var(--vscode-textCodeBlock-background, #313244) 50%, transparent); font-weight: 600; }
+
+    /* Syntax highlight base */
+    .mypi-md-content .hljs { background: #313244; color: #cdd6f4; }
+    .mypi-md-content .hljs-keyword { color: #cba6f7; }
+    .mypi-md-content .hljs-string { color: #a6e3a1; }
+    .mypi-md-content .hljs-number { color: #f9e2af; }
+    .mypi-md-content .hljs-comment { color: #a6adc8; font-style: italic; }
+    .mypi-md-content .hljs-function .hljs-title { color: #89b4fa; }
+    .mypi-md-content .hljs-built_in { color: #94e2d5; }
+    .mypi-md-content .hljs-params { color: #f5c2e7; }
+    .mypi-md-content .hljs-literal { color: #f38ba8; }
+    .mypi-md-content .hljs-type { color: #f9e2af; }
+    .mypi-md-content .hljs-attr { color: #89b4fa; }
+    .mypi-md-content .hljs-variable { color: #cdd6f4; }
+    .mypi-md-content .hljs-meta { color: #cba6f7; }
+    .mypi-md-content .hljs-selector-class { color: #a6e3a1; }
+    .mypi-md-content .hljs-selector-tag { color: #f38ba8; }
+    .mypi-md-content .hljs-property { color: #89b4fa; }
+
     /* Input field glow */
     .mypi-input:focus {
       outline: none;
