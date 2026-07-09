@@ -53,7 +53,7 @@
           "description": "LLM provider (Anthropic, OpenAI, DeepSeek, Z.AI, or Together AI)"
         },
         "mypi-by-sl.model": {
-          "type": "string", "default": "claude-sonnet-4-20250514",
+          "type": "string", "default": "",
           "description": "Model ID (leave empty for provider default)"
         },
         "mypi-by-sl.apiEndpoint": {

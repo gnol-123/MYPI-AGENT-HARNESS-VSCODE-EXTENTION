@@ -1,4 +1,8 @@
+/// <reference types="vscode-webview" />
+
 import React, { useState, useRef, useCallback, KeyboardEvent, useEffect } from 'react';
+
+const vscodeApi = acquireVsCodeApi();
 
 interface SlashCommand {
   command: string;
@@ -17,11 +21,14 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { command: '/docs', label: 'Fetch Docs', description: 'Get API docs via Context7', prompt: 'Using context7, fetch documentation for: ' },
   { command: '/plan', label: 'Create Plan', description: 'Write an implementation plan', prompt: 'Using brainstorming and writing-plans, create a plan for: ' },
   { command: '/agent', label: 'Agent Prompt', description: 'Full agent instructions mode', prompt: '' },
+  { command: '/model', label: 'Switch Model', description: 'Change the AI model', prompt: '' },
 ];
 
 interface InputBoxProps {
   onSend: (text: string) => void;
   disabled: boolean;
+  availableModels: string[];
+  currentModel: string;
 }
 
 const styles: Record<string, React.CSSProperties> = {
@@ -129,11 +136,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled }) => {
+export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableModels, currentModel }) => {
   const [text, setText] = useState('');
   const [showCommands, setShowCommands] = useState(false);
   const [filteredCommands, setFilteredCommands] = useState<SlashCommand[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [showModels, setShowModels] = useState(false);
+  const [filteredModels, setFilteredModels] = useState<string[]>([]);
+  const [selectedModelIndex, setSelectedModelIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
@@ -152,6 +162,16 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled }) => {
   }, []);
 
   const insertCommand = useCallback((cmd: SlashCommand) => {
+    if (cmd.command === '/model') {
+      // Show model list instead of inserting text
+      setShowModels(true);
+      setFilteredModels(availableModels);
+      setSelectedModelIndex(0);
+      setText('');
+      setShowCommands(false);
+      return;
+    }
+
     const value = text;
     const cursorPos = textareaRef.current?.selectionStart ?? value.length;
     const textBeforeCursor = value.substring(0, cursorPos);
@@ -171,7 +191,7 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled }) => {
         textareaRef.current.focus();
       }
     }, 0);
-  }, [text]);
+  }, [text, availableModels]);
 
   const handleSend = () => {
     const trimmed = text.trim();
@@ -188,6 +208,16 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled }) => {
     const value = e.target.value;
     setText(value);
 
+    if (showModels) {
+      const filtered = availableModels.filter((m) =>
+        m.toLowerCase().includes(value.toLowerCase()),
+      );
+      setFilteredModels(filtered);
+      if (filtered.length === 0) setShowModels(false);
+      setSelectedModelIndex(0);
+      return;
+    }
+
     const query = getSlashQuery(value);
     if (query !== null) {
       const filtered = filterCommands(query);
@@ -200,6 +230,35 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled }) => {
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showModels) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedModelIndex((prev) => Math.min(prev + 1, filteredModels.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedModelIndex((prev) => Math.max(prev - 1, 0));
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        if (filteredModels[selectedModelIndex]) {
+          e.preventDefault();
+          const selectedModel = filteredModels[selectedModelIndex];
+          vscodeApi.postMessage({ type: 'switchModel', model: selectedModel });
+          setShowModels(false);
+          setText('');
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowModels(false);
+        return;
+      }
+      return;
+    }
+
     if (showCommands) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -262,6 +321,30 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled }) => {
             >
               <span style={styles.commandBadge}>{cmd.command}</span>
               <span style={styles.commandDesc}>{cmd.description}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {showModels && filteredModels.length > 0 && (
+        <div style={styles.popup} ref={popupRef}>
+          <div style={styles.popupHeader}>Switch Model {currentModel ? `(current: ${currentModel})` : ''}</div>
+          {filteredModels.map((model, i) => (
+            <div
+              key={model}
+              style={{
+                ...styles.popupItem,
+                ...(i === selectedModelIndex ? styles.popupItemActive : {}),
+                ...(model === currentModel ? { fontWeight: 600 } : {}),
+              }}
+              onClick={() => {
+                vscodeApi.postMessage({ type: 'switchModel', model });
+                setShowModels(false);
+                setText('');
+              }}
+              onMouseEnter={() => setSelectedModelIndex(i)}
+            >
+              <span style={styles.commandBadge}>{model === currentModel ? '✓' : ''}</span>
+              <span style={{ fontSize: '12px' }}>{model}</span>
             </div>
           ))}
         </div>

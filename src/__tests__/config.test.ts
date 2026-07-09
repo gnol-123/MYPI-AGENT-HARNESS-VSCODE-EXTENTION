@@ -24,7 +24,7 @@ describe('buildConfig', () => {
     const config = buildConfig({});
     expect(config.provider).toBe('anthropic');
     expect(config.maxTokens).toBe(8192);
-    expect(config.model).toBe('claude-sonnet-4-20250514');
+    expect(config.model).toBe('');
   });
 
   it('should handle openai provider', () => {
@@ -80,7 +80,7 @@ describe('PROVIDER_PRESETS', () => {
   });
 
   it('should have default models', () => {
-    expect(PROVIDER_PRESETS.deepseek.defaultModel).toBe('deepseek-chat');
+    expect(PROVIDER_PRESETS.deepseek.defaultModel).toBe('deepseek-v4-pro');
     expect(PROVIDER_PRESETS.anthropic.defaultModel).toBe('claude-sonnet-4-20250514');
   });
 });

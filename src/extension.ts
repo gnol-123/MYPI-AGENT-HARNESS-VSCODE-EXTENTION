@@ -35,6 +35,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     chatProvider = new ChatViewProvider(context.extensionUri);
     chatProvider.setState(context.globalState);
+    chatProvider.onSwitchModel = async (newModel: string) => {
+      currentAgentLoop = undefined;
+      const loop = await createAgentLoop(context, newModel);
+      if (loop) {
+        chatProvider.setAgentLoop(loop);
+      }
+    };
 
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider('mypi-by-sl.chatView', chatProvider),
@@ -142,7 +149,7 @@ async function promptSetApiKey(context: vscode.ExtensionContext): Promise<void> 
   }
 }
 
-async function createAgentLoop(context: vscode.ExtensionContext): Promise<AgentLoop | undefined> {
+async function createAgentLoop(context: vscode.ExtensionContext, modelOverride?: string): Promise<AgentLoop | undefined> {
   const config = getConfig();
 
   const apiKey = await getApiKey(context.secrets);
@@ -161,22 +168,18 @@ async function createAgentLoop(context: vscode.ExtensionContext): Promise<AgentL
   let provider: LLMProvider;
   const preset = PROVIDER_PRESETS[config.provider];
 
+  const model = modelOverride || config.model || preset.defaultModel;
+  const endpoint = config.apiEndpoint || preset.defaultEndpoint;
+
   if (config.provider === 'anthropic') {
-    provider = createAnthropicProvider({
-      apiKey,
-      model: config.model || preset.defaultModel,
-    });
+    provider = createAnthropicProvider({ apiKey, model });
   } else {
-    provider = createOpenAICompatProvider({
-      apiKey,
-      model: config.model || preset.defaultModel,
-      baseUrl: config.apiEndpoint || preset.defaultEndpoint,
-    });
+    provider = createOpenAICompatProvider({ apiKey, model, baseUrl: endpoint });
   }
 
   const skills = await loadSkills(skillsPath);
 
-  return new AgentLoop(provider, toolRegistry, skills, config.maxTokens, preset.defaultModel, preset.name);
+  return new AgentLoop(provider, toolRegistry, skills, config.maxTokens, model, preset.name, config.provider, preset.models);
 }
 
 export function deactivate(): void {

@@ -15,7 +15,9 @@ export interface AgentStatus {
   cwd: string;
   model: string;
   provider: string;
+  providerKey: string;
   tokenUsage: TokenUsage;
+  availableModels: string[];
 }
 
 export class AgentLoop {
@@ -28,6 +30,8 @@ export class AgentLoop {
     private maxTokens: number,
     private modelName: string = '',
     private providerName: string = '',
+    private providerKey: string = '',
+    private availableModels: string[] = [],
   ) {}
 
   getStatus(): AgentStatus {
@@ -35,7 +39,9 @@ export class AgentLoop {
       cwd: process.cwd(),
       model: this.modelName,
       provider: this.providerName,
+      providerKey: this.providerKey,
       tokenUsage: { ...this.tokenUsage },
+      availableModels: this.availableModels,
     };
   }
 

@@ -6,7 +6,7 @@ function getVsCodeSettings(): Record<string, unknown> {
   const config = vscode.workspace.getConfiguration('mypi-by-sl');
   return {
     'mypi-by-sl.provider': config.get<string>('provider', 'anthropic'),
-    'mypi-by-sl.model': config.get<string>('model', 'claude-sonnet-4-20250514'),
+    'mypi-by-sl.model': config.get<string>('model', ''),
     'mypi-by-sl.apiEndpoint': config.get<string>('apiEndpoint', ''),
     'mypi-by-sl.maxTokens': config.get<number>('maxTokens', 8192),
     'mypi-by-sl.toolTimeout': config.get<number>('toolTimeout', 120),

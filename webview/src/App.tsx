@@ -335,7 +335,7 @@ export const App: React.FC = () => {
             </span>
           </div>
         )}
-        <InputBox onSend={sendMessage} disabled={isLoading} />
+        <InputBox onSend={sendMessage} disabled={isLoading} availableModels={agentStatus.availableModels} currentModel={agentStatus.model} />
       </div>
     </div>
   );

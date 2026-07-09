@@ -25,6 +25,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private sessions: Map<string, StoredSession> = new Map();
   private activeSessionId: string;
   private globalState: vscode.Memento | undefined;
+  public onSwitchModel: ((model: string) => void) | undefined;
 
   constructor(extensionUri: vscode.Uri) {
     this.extensionUri = extensionUri;
@@ -232,6 +233,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       case 'deleteSession': {
         const sessionId = message.sessionId as string;
         this.deleteSession(sessionId);
+        break;
+      }
+
+      case 'switchModel': {
+        const newModel = message.model as string;
+        if (this.onSwitchModel) {
+          this.onSwitchModel(newModel);
+        }
         break;
       }
 
