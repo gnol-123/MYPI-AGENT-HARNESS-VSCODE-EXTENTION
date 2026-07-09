@@ -11,7 +11,7 @@ import { bashTool, setBashCwd } from './tools/bash';
 import { webFetchTool } from './tools/web-fetch';
 import { context7Tool } from './tools/context7';
 import { loadSkills } from './skills/loader';
-import { piAgentDir, resetHarnessCache, setBundledHarnessDir } from './agent/system-prompt';
+import { piAgentDir, resetHarnessCache, setBundledHarnessDir, setWorkspaceRoot } from './agent/system-prompt';
 import * as fs from 'fs';
 import { createAnthropicProvider } from './providers/anthropic';
 import { createOpenAICompatProvider } from './providers/openai-compat';
@@ -29,6 +29,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (workspaceFolder) {
       setBashCwd(workspaceFolder.uri.fsPath);
     }
+    // Environment snapshot + workspace CLAUDE.md/AGENTS.md for the system prompt.
+    setWorkspaceRoot(workspaceFolder?.uri.fsPath);
 
     toolRegistry = new ToolRegistry();
     toolRegistry.register(readTool);

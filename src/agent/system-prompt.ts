@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { execSync } from 'child_process';
 import { Skill } from '../skills/loader';
 
 // Fallback used only when ~/.pi/agent is not available on this machine.
@@ -24,8 +25,18 @@ Before you claim something is done, fixed, working, or passing, actually verify 
 
 ## Safety
 - Do what has been asked; nothing more, nothing less.
-- For hard-to-reverse or outward-facing actions (deleting files, committing, pushing), confirm first unless clearly authorized.
-- Do not commit or push to git unless the user asks.
+- For hard-to-reverse or outward-facing actions (deleting files, pushing, publishing), confirm first unless clearly authorized.
+`;
+
+// Injected in code, not SYSTEM.md, so it applies no matter which harness file
+// a machine loads (live ~/.pi/agent copies drift from the bundled snapshot).
+const CORE_BEHAVIOR = `
+
+# Core behavior
+- Proactiveness: when asked to do something, do it fully, including directly implied follow-ups. When asked a question, answer it first — do not jump to editing files the user did not ask you to touch.
+- Batching: you may request multiple tool calls in a single turn. When actions are independent (reading several files, running unrelated commands), batch them in one turn instead of one at a time — every extra round-trip costs the user seconds.
+- Security: assist with defensive security tasks only. Refuse to create, improve, or explain code intended for malicious use.
+- Git: commit frequently as you complete logical units of work; do not wait until the whole task is finished. Keep messages short with a TYPE: header (e.g. "FIX: ..."). Never add yourself as a co-author. Do not push unless asked. This supersedes any earlier instruction to avoid committing without being asked.
 `;
 
 const TOOLS_SECTION = `
@@ -97,6 +108,87 @@ export function loadPiHarness(): PiHarness {
 /** Test hook / used when the user edits ~/.pi/agent files mid-session. */
 export function resetHarnessCache(): void {
   cachedHarness = undefined;
+  cachedEnvironment = undefined;
+  cachedWorkspaceInstructions = undefined;
+}
+
+let workspaceRoot: string | undefined;
+let cachedEnvironment: string | undefined;
+let cachedWorkspaceInstructions: string | undefined;
+
+/** Called from activate() with the first workspace folder. */
+export function setWorkspaceRoot(dir: string | undefined): void {
+  workspaceRoot = dir;
+  cachedEnvironment = undefined;
+  cachedWorkspaceInstructions = undefined;
+}
+
+function git(args: string, cwd: string): string {
+  try {
+    return execSync(`git ${args}`, {
+      cwd,
+      timeout: 1500,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Claude Code parity: cwd, OS, date, and a git snapshot in the prompt save the
+ * model a whole tool-call round-trip on most first turns. Snapshotted once per
+ * session — both to keep git off the per-message hot path and to keep the
+ * prompt byte-stable for provider-side prompt caching.
+ */
+function buildEnvironmentContext(): string {
+  if (cachedEnvironment !== undefined) return cachedEnvironment;
+  const cwd = workspaceRoot || process.cwd();
+
+  const lines = [
+    `Working directory: ${cwd}`,
+    `Platform: ${process.platform} (${os.release()})`,
+    `Today's date: ${new Date().toISOString().slice(0, 10)}`,
+  ];
+
+  const branch = git('branch --show-current', cwd);
+  if (branch) {
+    lines.push(`Git branch: ${branch}`);
+    const status = git('status --short', cwd);
+    const statusLines = status ? status.split('\n') : [];
+    const shown = statusLines.slice(0, 20).join('\n');
+    const more = statusLines.length > 20 ? `\n(+${statusLines.length - 20} more)` : '';
+    lines.push(`Git status (snapshot at session start — may be stale):\n${shown || '(clean)'}${more}`);
+    const log = git('log --oneline -5', cwd);
+    if (log) lines.push(`Recent commits:\n${log}`);
+  } else {
+    lines.push('Git: not a repository');
+  }
+
+  cachedEnvironment = lines.join('\n');
+  return cachedEnvironment;
+}
+
+/** The workspace's own CLAUDE.md / AGENTS.md — per-project memory, like Claude Code. */
+function loadWorkspaceInstructions(): string {
+  if (cachedWorkspaceInstructions !== undefined) return cachedWorkspaceInstructions;
+  let out = '';
+  if (workspaceRoot) {
+    for (const name of ['CLAUDE.md', 'AGENTS.md']) {
+      const filePath = path.join(workspaceRoot, name);
+      try {
+        const content = fs.readFileSync(filePath, 'utf-8').trim();
+        if (content) {
+          out += `\n<project_instructions path="${filePath}">\n${content}\n</project_instructions>\n`;
+        }
+      } catch {
+        // File absent — normal.
+      }
+    }
+  }
+  cachedWorkspaceInstructions = out;
+  return out;
 }
 
 export function buildSystemPrompt(skills: Skill[], task?: string, thinkingEffort?: 'low' | 'medium' | 'high'): string {
@@ -111,10 +203,14 @@ export function buildSystemPrompt(skills: Skill[], task?: string, thinkingEffort
   }
 
   prompt += TOOLS_SECTION;
+  prompt += CORE_BEHAVIOR;
+  prompt += `\n# Environment (snapshot at session start)\n${buildEnvironmentContext()}\n`;
 
   if (harness.agents) {
-    prompt += `\n<project_instructions path="~/.pi/agent/AGENTS.md">\n${harness.agents}\n</project_instructions>\n`;
+    prompt += `\n<user_instructions path="~/.pi/agent/AGENTS.md">\n${harness.agents}\n</user_instructions>\n`;
   }
+
+  prompt += loadWorkspaceInstructions();
 
   if (skills.length > 0) {
     prompt += '\n\nThe following skills provide specialized instructions for specific tasks.\n';
