@@ -10,6 +10,8 @@ interface ChatViewProps {
   streamingText: string;
   isLoading: boolean;
   waiting: boolean;
+  /** Live status from the host ("Thinking...", "Preparing read..."). */
+  statusLabel: string;
   thinking: boolean;
   thinkingText: string;
   isRunning: boolean;
@@ -123,7 +125,7 @@ function renderMarkdown(text: string): string {
   return marked.parse(text, { renderer, breaks: true, gfm: true }) as string;
 }
 
-export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isLoading, waiting, thinking, thinkingText, isRunning, queuedCount, queuedTexts, liveToolCalls, streamBlocks, onAbort, onCancelQueued }) => {
+export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isLoading, waiting, statusLabel, thinking, thinkingText, isRunning, queuedCount, queuedTexts, liveToolCalls, streamBlocks, onAbort, onCancelQueued }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -248,7 +250,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isL
         <div className="mypi-streaming">
           <div className="mypi-role" style={{ color: '#cba6f7' }}>MYPI</div>
           <div style={{ fontSize: '12.5px', color: 'var(--vscode-descriptionForeground)', fontStyle: 'italic', padding: '4px 0' }}>
-            {thinking ? 'thinking...' : isRunning ? 'starting...' : 'queued...'}
+            {thinking
+              ? 'thinking...'
+              : isRunning
+                ? (statusLabel || 'starting...').toLowerCase()
+                : 'queued...'}
           </div>
           {thinking && thinkingText && (
             <div className="mypi-thinking-block">{thinkingText}</div>

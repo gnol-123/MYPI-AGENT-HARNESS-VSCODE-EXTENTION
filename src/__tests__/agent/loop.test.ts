@@ -137,7 +137,12 @@ describe('AgentLoop', () => {
     const events: LLMEvent[] = [];
     await loop.run(new ConversationHistory(), 'Hi', (event) => events.push(event));
 
-    expect(loop.getStatus().tokenUsage).toEqual({ inputTokens: 120, outputTokens: 30 });
+    expect(loop.getStatus().tokenUsage).toEqual({
+      inputTokens: 120,
+      outputTokens: 30,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
     expect(events.some((e) => e.type === 'usage')).toBe(true);
   });
 

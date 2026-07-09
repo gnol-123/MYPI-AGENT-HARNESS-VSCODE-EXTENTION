@@ -1,5 +1,6 @@
 import { ConversationHistory } from '../agent/history';
 import { Message } from '../providers/types';
+import { TurnUsage, contextTokens } from '../pricing';
 
 const STORAGE_KEY = 'mypi-sessions-v2';
 const LEGACY_KEY = 'mypi-sessions';
@@ -15,13 +16,36 @@ export interface DisplayMessage {
 export interface SessionUsage {
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   costUsd: number;
   /** Tokens in the most recent request+response: how full the context is. */
   lastContextTokens: number;
+  /** Window of the model that served that request; 0 when never used. */
+  lastContextWindow: number;
+  /**
+   * Requests whose model had no pricing row. costUsd excludes them, so a
+   * non-zero count means the displayed cost is a floor, not a total.
+   */
+  unpricedRequests: number;
 }
 
 export function emptyUsage(): SessionUsage {
-  return { inputTokens: 0, outputTokens: 0, costUsd: 0, lastContextTokens: 0 };
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    costUsd: 0,
+    lastContextTokens: 0,
+    lastContextWindow: 0,
+    unpricedRequests: 0,
+  };
+}
+
+/** Older persisted sessions predate the cache/unpriced fields. */
+function migrateUsage(stored: Partial<SessionUsage> | undefined): SessionUsage {
+  return { ...emptyUsage(), ...(stored ?? {}) };
 }
 
 export interface Session {
@@ -50,7 +74,7 @@ interface SerializedSession {
   historyMessages: Message[];
   createdAt: number;
   updatedAt: number;
-  usage?: SessionUsage;
+  usage?: Partial<SessionUsage>;
 }
 
 interface SerializedState {
@@ -157,13 +181,24 @@ export class SessionManager {
     this.save();
   }
 
-  addUsage(sessionId: string, inputTokens: number, outputTokens: number, turnCostUsd: number | undefined): void {
+  /** Records one request's usage. `requestCostUsd` is undefined for unpriced models. */
+  addUsage(sessionId: string, usage: TurnUsage, requestCostUsd: number | undefined, contextWindow: number): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
-    session.usage.inputTokens += inputTokens;
-    session.usage.outputTokens += outputTokens;
-    if (turnCostUsd !== undefined) session.usage.costUsd += turnCostUsd;
-    session.usage.lastContextTokens = inputTokens + outputTokens;
+
+    session.usage.inputTokens += usage.inputTokens;
+    session.usage.outputTokens += usage.outputTokens;
+    session.usage.cacheReadTokens += usage.cacheReadTokens ?? 0;
+    session.usage.cacheWriteTokens += usage.cacheWriteTokens ?? 0;
+
+    if (requestCostUsd === undefined) {
+      session.usage.unpricedRequests += 1;
+    } else {
+      session.usage.costUsd += requestCostUsd;
+    }
+
+    session.usage.lastContextTokens = contextTokens(usage);
+    session.usage.lastContextWindow = contextWindow;
     this.save();
   }
 
@@ -212,7 +247,7 @@ export class SessionManager {
             history: ConversationHistory.fromJSON(s.historyMessages),
             createdAt: s.createdAt,
             updatedAt: s.updatedAt,
-            usage: s.usage ?? emptyUsage(),
+            usage: migrateUsage(s.usage),
           },
         ]),
       );

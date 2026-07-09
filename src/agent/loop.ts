@@ -1,4 +1,4 @@
-import { LLMProvider, LLMEvent, ToolDef } from '../providers/types';
+import { LLMProvider, LLMEvent, ToolDef, ThinkingEffort } from '../providers/types';
 import { ToolRegistry } from '../tools/registry';
 import { ConversationHistory } from './history';
 import { Skill } from '../skills/loader';
@@ -12,6 +12,8 @@ const RETRY_BASE_DELAY_MS = 1000;
 export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
 }
 
 export interface AgentStatus {
@@ -24,7 +26,7 @@ export interface AgentStatus {
 }
 
 export class AgentLoop {
-  private tokenUsage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+  private tokenUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
   private abortController: AbortController | undefined;
 
   constructor(
@@ -36,8 +38,11 @@ export class AgentLoop {
     private providerName: string = '',
     private providerKey: string = '',
     private availableModels: string[] = [],
-    private thinkingEffort: 'low' | 'medium' | 'high' = 'medium',
-  ) {}
+    private thinkingEffort: ThinkingEffort = 'low',
+  ) {
+    // A freshly built provider must agree with the loop's effort from request one.
+    this.provider.setThinkingEffort?.(this.thinkingEffort);
+  }
 
   getStatus(): AgentStatus {
     const cwd = getBashCwd();
@@ -51,12 +56,17 @@ export class AgentLoop {
     };
   }
 
-  setThinkingEffort(effort: 'low' | 'medium' | 'high'): void {
+  /**
+   * The one place effort is applied. It drives both the system-prompt guidance
+   * and the provider's API-level reasoning budget, so the two can never drift.
+   */
+  setThinkingEffort(effort: ThinkingEffort): void {
     this.thinkingEffort = effort;
+    this.provider.setThinkingEffort?.(effort);
   }
 
-  setThinkingEnabled(enabled: boolean): void {
-    this.provider.setThinkingEnabled?.(enabled);
+  getThinkingEffort(): ThinkingEffort {
+    return this.thinkingEffort;
   }
 
   abort(): void {
@@ -139,6 +149,8 @@ export class AgentLoop {
             } else if (event.type === 'usage') {
               this.tokenUsage.inputTokens += event.inputTokens;
               this.tokenUsage.outputTokens += event.outputTokens;
+              this.tokenUsage.cacheReadTokens += event.cacheReadTokens ?? 0;
+              this.tokenUsage.cacheWriteTokens += event.cacheWriteTokens ?? 0;
               onEvent(event);
             } else if (event.type === 'tool_use') {
               if (!foundSolution) {

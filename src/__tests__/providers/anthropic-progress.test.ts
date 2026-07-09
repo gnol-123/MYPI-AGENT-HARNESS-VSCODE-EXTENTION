@@ -101,6 +101,8 @@ describe('anthropic streaming progress', () => {
       type: 'usage',
       inputTokens: 10,
       outputTokens: 5,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
     });
   });
 });
@@ -128,18 +130,59 @@ describe('anthropic prompt caching', () => {
 });
 
 describe('anthropic thinking budget', () => {
-  it('honors the configured thinking level instead of always using medium', async () => {
-    const provider = createAnthropicProvider({
-      apiKey: 'k',
-      model: 'claude-sonnet-5',
-      thinkingLevel: 'low',
-    });
+  async function runWithEffort(level: 'off' | 'low' | 'medium' | 'high') {
+    const provider = createAnthropicProvider({ apiKey: 'k', model: 'claude-sonnet-5', thinkingLevel: level });
     await collect(provider.streamChat([{ role: 'user', content: 'hi' }], [], 'SYSTEM', 4096));
-    expect(lastParams.thinking).toEqual({ type: 'enabled', budget_tokens: 2048 });
+  }
+
+  it('disables reasoning on low — the fast setting must not burn thinking tokens', async () => {
+    await runWithEffort('low');
+    expect(lastParams.thinking).toBeUndefined();
   });
 
   it('omits thinking entirely when the level is off', async () => {
-    await run();
+    await runWithEffort('off');
     expect(lastParams.thinking).toBeUndefined();
+  });
+
+  it('scales the budget with the level rather than always using medium', async () => {
+    await runWithEffort('medium');
+    expect(lastParams.thinking).toEqual({ type: 'enabled', budget_tokens: 4096 });
+
+    await runWithEffort('high');
+    expect(lastParams.thinking).toEqual({ type: 'enabled', budget_tokens: 8192 });
+  });
+
+  it('applies setThinkingEffort to the very next request, without a rebuild', async () => {
+    const provider = createAnthropicProvider({ apiKey: 'k', model: 'claude-sonnet-5', thinkingLevel: 'low' });
+
+    await collect(provider.streamChat([{ role: 'user', content: 'hi' }], [], 'SYSTEM', 4096));
+    expect(lastParams.thinking).toBeUndefined();
+
+    provider.setThinkingEffort!('high');
+    await collect(provider.streamChat([{ role: 'user', content: 'hi' }], [], 'SYSTEM', 4096));
+    expect(lastParams.thinking).toEqual({ type: 'enabled', budget_tokens: 8192 });
+  });
+});
+
+describe('anthropic usage reporting', () => {
+  it('reports cache classes separately so they are not billed as fresh input', async () => {
+    finalMessage = {
+      content: [],
+      usage: {
+        input_tokens: 100,
+        output_tokens: 20,
+        cache_read_input_tokens: 5000,
+        cache_creation_input_tokens: 300,
+      },
+    };
+    const events = await run();
+    expect(events.find((e) => e.type === 'usage')).toEqual({
+      type: 'usage',
+      inputTokens: 100,
+      outputTokens: 20,
+      cacheReadTokens: 5000,
+      cacheWriteTokens: 300,
+    });
   });
 });

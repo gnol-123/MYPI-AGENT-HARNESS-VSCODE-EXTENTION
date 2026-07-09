@@ -50,8 +50,14 @@ export interface ThinkingChunk {
 export interface SessionUsage {
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   costUsd: number;
   lastContextTokens: number;
+  /** Window of the model that last served this session; 0 when never used. */
+  lastContextWindow: number;
+  /** Requests from models with no pricing row; cost is a floor when non-zero. */
+  unpricedRequests: number;
 }
 
 export interface SessionUsageMsg {
@@ -59,6 +65,10 @@ export interface SessionUsageMsg {
   sessionId: string;
   usage: SessionUsage;
   contextPct: number;
+  /** Context window of the model that served the request. */
+  contextWindow: number;
+  /** False when some requests could not be priced. */
+  costKnown: boolean;
 }
 
 export interface SessionsList {

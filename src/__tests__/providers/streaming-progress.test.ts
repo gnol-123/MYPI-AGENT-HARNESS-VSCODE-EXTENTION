@@ -107,6 +107,92 @@ describe('openai-compat streaming progress', () => {
     });
   });
 
+  it('emits usage exactly once even when the provider repeats cumulative totals', async () => {
+    // Z.AI and OpenAI-compat endpoints resend a cumulative `usage` on several
+    // chunks. Yielding each one made the agent loop sum them, inflating cost.
+    stubFetch([
+      'data: {"choices":[{"delta":{"content":"a"}}],"usage":{"prompt_tokens":500,"completion_tokens":10}}\n\n',
+      'data: {"choices":[{"delta":{"content":"b"}}],"usage":{"prompt_tokens":500,"completion_tokens":20}}\n\n',
+      'data: {"choices":[{"delta":{}}],"usage":{"prompt_tokens":500,"completion_tokens":30}}\n\n',
+      'data: [DONE]\n\n',
+    ]);
+    const provider = createOpenAICompatProvider({
+      apiKey: 'k',
+      model: 'glm-4.6',
+      baseUrl: 'https://example.test/v1',
+      providerKey: 'z-ai',
+    });
+
+    const events = await collect(provider.streamChat([{ role: 'user', content: 'hi' }], [], 'sys', 1024));
+    const usages = events.filter((e) => e.type === 'usage');
+
+    expect(usages).toHaveLength(1);
+    expect(usages[0]).toEqual({ type: 'usage', inputTokens: 500, outputTokens: 30, cacheReadTokens: 0 });
+  });
+
+  it('subtracts cached prompt tokens so they are not billed at the full input rate', async () => {
+    stubFetch([
+      'data: {"choices":[{"delta":{"content":"a"}}],"usage":{"prompt_tokens":1000,"completion_tokens":10,"prompt_cache_hit_tokens":800}}\n\n',
+      'data: [DONE]\n\n',
+    ]);
+    const provider = createOpenAICompatProvider({
+      apiKey: 'k',
+      model: 'deepseek-v4-pro',
+      baseUrl: 'https://example.test/v1',
+      providerKey: 'deepseek',
+    });
+
+    const events = await collect(provider.streamChat([{ role: 'user', content: 'hi' }], [], 'sys', 1024));
+
+    expect(events.find((e) => e.type === 'usage')).toEqual({
+      type: 'usage',
+      inputTokens: 200,
+      outputTokens: 10,
+      cacheReadTokens: 800,
+    });
+  });
+
+  it('reads usage from the z-ai { data: { ... } } envelope', async () => {
+    stubFetch([
+      'data: {"data":{"choices":[{"delta":{"content":"a"}}],"usage":{"prompt_tokens":42,"completion_tokens":7}}}\n\n',
+      'data: [DONE]\n\n',
+    ]);
+    const provider = createOpenAICompatProvider({
+      apiKey: 'k',
+      model: 'glm-4.6',
+      baseUrl: 'https://example.test/v1',
+      providerKey: 'z-ai',
+    });
+
+    const events = await collect(provider.streamChat([{ role: 'user', content: 'hi' }], [], 'sys', 1024));
+    expect(events.find((e) => e.type === 'usage')).toEqual({
+      type: 'usage',
+      inputTokens: 42,
+      outputTokens: 7,
+      cacheReadTokens: 0,
+    });
+  });
+
+  it('honors setThinkingEffort on the next request body', async () => {
+    stubFetch(['data: [DONE]\n\n']);
+    const provider = createOpenAICompatProvider({
+      apiKey: 'k',
+      model: 'glm-4.6',
+      baseUrl: 'https://example.test/v1',
+      providerKey: 'z-ai',
+      thinkingLevel: 'low',
+    });
+
+    await collect(provider.streamChat([{ role: 'user', content: 'hi' }], [], 'sys', 1024));
+    let body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    expect(body.thinking).toEqual({ type: 'disabled' });
+
+    provider.setThinkingEffort!('high');
+    await collect(provider.streamChat([{ role: 'user', content: 'hi' }], [], 'sys', 1024));
+    body = JSON.parse((globalThis.fetch as any).mock.calls[1][1].body);
+    expect(body.thinking).toEqual({ type: 'enabled' });
+  });
+
   it('emits tool_use_start only once per tool call', async () => {
     stubFetch(TOOL_ONLY_SSE);
     const provider = createOpenAICompatProvider({

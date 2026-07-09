@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { LLMProvider, LLMEvent, Message, ToolDef } from './types';
+import { LLMProvider, LLMEvent, Message, ToolDef, ThinkingEffort } from './types';
 
 interface AnthropicConfig {
   apiKey: string;
@@ -9,7 +9,17 @@ interface AnthropicConfig {
   timeoutMs?: number;
 }
 
-const THINKING_BUDGETS = { low: 2048, medium: 4096, high: 8192 } as const;
+/**
+ * Effort -> extended-thinking budget. `low` disables reasoning outright: that
+ * is the whole point of the fast setting, and a nonzero budget would make the
+ * model burn reasoning tokens before emitting anything.
+ */
+const THINKING_BUDGETS: Record<ThinkingEffort, number> = { low: 0, medium: 4096, high: 8192 };
+
+/** The config accepts `off`, which the UI expresses as `low`. */
+function toEffort(level: AnthropicConfig['thinkingLevel']): ThinkingEffort {
+  return level === 'off' || level === undefined ? 'low' : level;
+}
 
 type ConvertedMessage = { role: 'user' | 'assistant'; content: unknown };
 
@@ -40,17 +50,15 @@ function withConversationCacheBreakpoint(messages: ConvertedMessage[]): Converte
 }
 
 export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
-  const configuredLevel = config.thinkingLevel ?? 'medium';
-  let thinkingEnabled = configuredLevel !== 'off';
-  const thinkingBudget = THINKING_BUDGETS[configuredLevel === 'off' ? 'low' : configuredLevel];
+  let effort: ThinkingEffort = toEffort(config.thinkingLevel);
   const client = new Anthropic({
     apiKey: config.apiKey,
     timeout: config.timeoutMs ?? 120_000,
   });
 
   return {
-    setThinkingEnabled(enabled: boolean) {
-      thinkingEnabled = enabled;
+    setThinkingEffort(next: ThinkingEffort) {
+      effort = next;
     },
     async *streamChat(
       messages: Message[],
@@ -84,8 +92,10 @@ export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
               }),
         }));
 
-        const thinking = thinkingEnabled
-          ? { type: 'enabled' as const, budget_tokens: thinkingBudget }
+        // Read per request so effort changes apply without a new provider.
+        const budget = THINKING_BUDGETS[effort];
+        const thinking = budget > 0
+          ? { type: 'enabled' as const, budget_tokens: budget }
           : undefined;
 
         let droppedThinking = false;
@@ -145,10 +155,15 @@ export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
         }
 
         if (finalMessage.usage) {
+          // input_tokens already excludes both cache classes; they are billed
+          // at their own rates, so they are reported separately.
+          const u = finalMessage.usage as any;
           yield {
             type: 'usage',
-            inputTokens: finalMessage.usage.input_tokens ?? 0,
-            outputTokens: finalMessage.usage.output_tokens ?? 0,
+            inputTokens: u.input_tokens ?? 0,
+            outputTokens: u.output_tokens ?? 0,
+            cacheReadTokens: u.cache_read_input_tokens ?? 0,
+            cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
           };
         }
 

@@ -1,4 +1,4 @@
-import { LLMProvider, LLMEvent, Message, ToolDef } from './types';
+import { LLMProvider, LLMEvent, Message, ToolDef, ThinkingEffort } from './types';
 
 interface OpenAICompatConfig {
   apiKey: string;
@@ -73,12 +73,33 @@ function convertTools(tools: ToolDef[]): Array<Record<string, unknown>> {
   }));
 }
 
-export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvider {
-  let thinkingEnabled = (config.thinkingLevel ?? 'medium') !== 'off';
+/**
+ * `prompt_tokens` is the total prompt size and already includes any cached
+ * tokens, so the cached portion is subtracted out rather than billed twice at
+ * the full input rate. DeepSeek reports `prompt_cache_hit_tokens`; OpenAI uses
+ * `prompt_tokens_details.cached_tokens`.
+ */
+function normalizeUsage(usage: Record<string, any>): LLMEvent {
+  const promptTokens = usage.prompt_tokens ?? 0;
+  const cacheRead =
+    usage.prompt_cache_hit_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0;
 
   return {
-    setThinkingEnabled(enabled: boolean) {
-      thinkingEnabled = enabled;
+    type: 'usage',
+    inputTokens: Math.max(0, promptTokens - cacheRead),
+    outputTokens: usage.completion_tokens ?? 0,
+    cacheReadTokens: cacheRead,
+  };
+}
+
+export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvider {
+  // `low` means no reasoning, matching the Anthropic provider.
+  let effort: ThinkingEffort =
+    config.thinkingLevel === 'off' || config.thinkingLevel === undefined ? 'low' : config.thinkingLevel;
+
+  return {
+    setThinkingEffort(next: ThinkingEffort) {
+      effort = next;
     },
     async *streamChat(
       messages: Message[],
@@ -97,10 +118,10 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
           stream: true,
         };
 
-        // Reasoning control — uses the mutable thinkingEnabled toggle (set by UI effort buttons)
+        // Reasoning control, read per request so UI effort changes apply live.
         // Z.AI and DeepSeek use `thinking: { type: enabled|disabled }`.
         if (config.providerKey === 'z-ai' || config.providerKey === 'deepseek') {
-          body.thinking = { type: thinkingEnabled ? 'enabled' : 'disabled' };
+          body.thinking = { type: effort === 'low' ? 'disabled' : 'enabled' };
         }
 
         if (tools.length > 0) {
@@ -145,6 +166,9 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
 
         const toolCalls: Map<number, { id: string; name: string; arguments: string }> = new Map();
         const announced = new Set<number>();
+        // Usage arrives cumulatively and often on more than one chunk. Keep the
+        // last tally and emit it once, or the totals compound.
+        let lastUsage: Record<string, any> | undefined;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -165,12 +189,9 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
               const parsed = JSON.parse(data);
               // Z.AI wraps chunks in { data: { ... } }; standard OpenAI-compat sends { choices: [...] }
               const choices: any[] = parsed.choices ?? parsed.data?.choices ?? [];
-              if (parsed.usage) {
-                yield {
-                  type: 'usage',
-                  inputTokens: parsed.usage.prompt_tokens ?? 0,
-                  outputTokens: parsed.usage.completion_tokens ?? 0,
-                };
+              const usage = parsed.usage ?? parsed.data?.usage;
+              if (usage) {
+                lastUsage = usage;
               }
               const choice = choices[0];
               if (!choice) continue;
@@ -216,6 +237,10 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
           } catch {
             yield { type: 'tool_use', id: tc.id, name: tc.name, input: {} };
           }
+        }
+
+        if (lastUsage) {
+          yield normalizeUsage(lastUsage);
         }
 
         yield { type: 'done' };

@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import { AgentLoop } from '../agent/loop';
-import { LLMEvent } from '../providers/types';
+import { LLMEvent, ThinkingEffort } from '../providers/types';
 import { setBashCwd } from '../tools/bash';
 import { SessionManager, Session } from './session-manager';
-import { costUsd, CONTEXT_WINDOW } from '../pricing';
+import { costUsd, contextWindowFor } from '../pricing';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   public static currentProvider: ChatViewProvider | undefined;
@@ -18,28 +18,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private sessionQueues = new Map<string, string[]>();
   public onSwitchModel: ((model: string) => void) | undefined;
   public onRequestAgentLoop: (() => Promise<AgentLoop | undefined>) | undefined;
-  /** Current thinking effort: 'low', 'medium', 'high' */
-  private thinkingEffort: 'low' | 'medium' | 'high' = 'medium';
+  /** Current thinking effort; 'low' disables API-level reasoning. */
+  private thinkingEffort: ThinkingEffort = 'low';
 
   constructor(extensionUri: vscode.Uri) {
     this.extensionUri = extensionUri;
   }
 
-  setThinkingEffort(effort: 'low' | 'medium' | 'high'): void {
+  setThinkingEffort(effort: ThinkingEffort): void {
     this.thinkingEffort = effort;
+    // AgentLoop applies it to the provider too, so there is one path only.
     this.agentLoop?.setThinkingEffort(effort);
     this.postMessage({ type: 'thinkingEffort', effort });
   }
-
-  /** Called by extension.ts to set the agent loop and toggle thinking */
-  applyThinkingToProvider(effort: 'low' | 'medium' | 'high'): void {
-    // Access the underlying provider via agent loop
-    if (this.onToggleThinking) {
-      this.onToggleThinking(effort);
-    }
-  }
-
-  public onToggleThinking: ((effort: 'low' | 'medium' | 'high') => void) | undefined;
 
   setState(state: vscode.Memento): void {
     this.sessionManager = new SessionManager(state);
@@ -48,7 +39,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   setAgentLoop(agentLoop: AgentLoop): void {
     this.agentLoop = agentLoop;
+    // A loop rebuilt for a model switch starts at its own default, which would
+    // silently discard the effort the user picked.
+    agentLoop.setThinkingEffort(this.thinkingEffort);
     this.sendStatus();
+    this.postMessage({ type: 'thinkingEffort', effort: this.thinkingEffort });
   }
 
   setPendingPrompt(text: string): void {
@@ -170,15 +165,26 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             }
             break;
           case 'usage': {
+            // Price at the model that served this request, not whatever is
+            // selected later — switching models mid-session must not reprice
+            // earlier requests.
             const model = this.agentLoop!.getStatus().model;
-            const turnCost = costUsd(model, event.inputTokens, event.outputTokens);
-            this.sessionManager.addUsage(session.id, event.inputTokens, event.outputTokens, turnCost);
+            const turn = {
+              inputTokens: event.inputTokens,
+              outputTokens: event.outputTokens,
+              cacheReadTokens: event.cacheReadTokens ?? 0,
+              cacheWriteTokens: event.cacheWriteTokens ?? 0,
+            };
+            const window = contextWindowFor(model);
+            this.sessionManager.addUsage(session.id, turn, costUsd(model, turn), window);
             const usage = this.sessionManager.get(session.id)!.usage;
             this.postMessage({
               type: 'sessionUsage',
               sessionId: session.id,
               usage,
-              contextPct: Math.min(100, (usage.lastContextTokens / CONTEXT_WINDOW) * 100),
+              contextPct: Math.min(100, (usage.lastContextTokens / window) * 100),
+              contextWindow: window,
+              costKnown: usage.unpricedRequests === 0,
             });
             break;
           }
@@ -278,6 +284,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         // Webview is fully initialized — send all session data now
         this.sendSessionsList();
         this.sendStatus();
+        // Otherwise the effort buttons show their own default, not the real one.
+        this.postMessage({ type: 'thinkingEffort', effort: this.thinkingEffort });
         if (this.pendingPrompt) {
           this.postMessage({ type: 'prefillPrompt', text: this.pendingPrompt });
           this.pendingPrompt = undefined;
@@ -383,9 +391,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
 
       case 'setThinkingEffort': {
-        const effort = message.effort as 'low' | 'medium' | 'high';
-        this.setThinkingEffort(effort);
-        this.applyThinkingToProvider(effort);
+        this.setThinkingEffort(message.effort as ThinkingEffort);
         break;
       }
 

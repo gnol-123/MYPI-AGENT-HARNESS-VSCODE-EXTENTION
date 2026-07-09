@@ -256,6 +256,27 @@ const HELP_COMMANDS: Array<[string, string]> = [
   ['/design', 'Design UI with frontend design skill'],
 ];
 
+/** Matches the host's fallback for models with no pricing row. */
+const DEFAULT_CONTEXT_WINDOW = 128_000;
+
+interface UsageView {
+  usage: SessionUsage;
+  contextPct: number;
+  contextWindow: number;
+  costKnown: boolean;
+}
+
+/** e.g. "3.2% of 200K · $0.0143" — or "$0.0143+" when some models are unpriced. */
+function formatUsage(view: UsageView): string {
+  const pct = view.contextPct < 0.1 ? '<0.1' : view.contextPct.toFixed(1);
+  const window = view.contextWindow >= 1_000_000
+    ? `${view.contextWindow / 1_000_000}M`
+    : `${Math.round(view.contextWindow / 1_000)}K`;
+  // A trailing "+" marks the cost as a lower bound, never a silent undercount.
+  const cost = `$${view.usage.costUsd.toFixed(4)}${view.costKnown ? '' : '+'}`;
+  return `${pct}% of ${window} · ${cost}`;
+}
+
 function relativeTime(ts: number): string {
   const diff = Date.now() - ts;
   const mins = Math.floor(diff / 60000);
@@ -276,7 +297,7 @@ export const App: React.FC = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [thinkingSessions, setThinkingSessions] = useState<Set<string>>(new Set());
   const [thinkingBySession, setThinkingBySession] = useState<Map<string, string>>(new Map());
-  const [usageBySession, setUsageBySession] = useState<Map<string, { usage: SessionUsage; contextPct: number }>>(new Map());
+  const [usageBySession, setUsageBySession] = useState<Map<string, UsageView>>(new Map());
   const [showHelp, setShowHelp] = useState(false);
   const [agentStatus, setAgentStatus] = useState({ cwd: '', model: '', provider: '', tokenUsage: { inputTokens: 0, outputTokens: 0 }, availableModels: [] as string[] });
 
@@ -506,7 +527,12 @@ export const App: React.FC = () => {
           break;
 
         case 'sessionUsage':
-          setUsageBySession((prev) => new Map(prev).set(msg.sessionId, { usage: msg.usage, contextPct: msg.contextPct }));
+          setUsageBySession((prev) => new Map(prev).set(msg.sessionId, {
+            usage: msg.usage,
+            contextPct: msg.contextPct,
+            contextWindow: msg.contextWindow,
+            costKnown: msg.costKnown,
+          }));
           break;
 
         case 'toolCallStart':
@@ -595,7 +621,15 @@ export const App: React.FC = () => {
             next.delete(msg.sessionId);
             return next;
           });
-          // Don't clear stream blocks — keep thinking/tools visible after done
+          // Clear the stream blocks. The message just pushed into `messages`
+          // already carries the text, the thinking blockquote and the tool
+          // cards; leaving the blocks up renders all of it a second time.
+          setStreamBlocksBySession((prev) => {
+            if (!prev.has(msg.sessionId)) return prev;
+            const next = new Map(prev);
+            next.delete(msg.sessionId);
+            return next;
+          });
           break;
         }
 
@@ -752,9 +786,14 @@ export const App: React.FC = () => {
             const next = new Map(prev);
             for (const info of msg.sessions) {
               if (info.usage) {
+                // The window is whatever model last served this session, not a
+                // global constant; 0 means the session has never run.
+                const window = info.usage.lastContextWindow || DEFAULT_CONTEXT_WINDOW;
                 next.set(info.id, {
                   usage: info.usage,
-                  contextPct: Math.min(100, (info.usage.lastContextTokens / 1_000_000) * 100),
+                  contextPct: Math.min(100, (info.usage.lastContextTokens / window) * 100),
+                  contextWindow: window,
+                  costKnown: (info.usage.unpricedRequests ?? 0) === 0,
                 });
               }
             }
@@ -981,6 +1020,7 @@ export const App: React.FC = () => {
           streamingText={streamingText}
           isLoading={isLoading}
           waiting={isLoading && !streamingText}
+          statusLabel={dotLabel}
           thinking={isThinking}
           thinkingText={thinkingText}
           isRunning={isRunning}
@@ -1068,10 +1108,8 @@ export const App: React.FC = () => {
               {agentStatus.cwd}
             </span>
             <span style={styles.statusItem}>{agentStatus.provider} · {agentStatus.model}</span>
-            <span style={styles.statusItem} title="Context used (of 1M tokens) · session cost">
-              {activeUsage
-                ? `${activeUsage.contextPct < 0.1 ? '<0.1' : activeUsage.contextPct.toFixed(1)}% of 1M · $${activeUsage.usage.costUsd.toFixed(4)}`
-                : ''}
+            <span style={styles.statusItem} title="Context used (of this model's window) · session cost">
+              {activeUsage ? formatUsage(activeUsage) : ''}
             </span>
           </div>
         )}

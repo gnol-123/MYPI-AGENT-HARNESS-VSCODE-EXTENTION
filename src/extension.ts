@@ -56,16 +56,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     chatProvider.setState(context.globalState);
     chatProvider.onRequestAgentLoop = () => ensureAgentLoop(context);
     chatProvider.onSwitchModel = async (newModel: string) => {
-      currentAgentLoop = undefined;
       const loop = await createAgentLoop(context, newModel);
       if (loop) {
+        // Must reassign: leaving this stale made every later effort change a
+        // no-op against a discarded loop. setAgentLoop re-applies the effort.
+        currentAgentLoop = loop;
         chatProvider.setAgentLoop(loop);
       }
-    };
-    chatProvider.onToggleThinking = (effort: 'low' | 'medium' | 'high') => {
-      // Only 'high' enables expensive API-level chain-of-thought reasoning
-      // 'low' and 'medium' disable it for fast, token-efficient responses
-      currentAgentLoop?.setThinkingEnabled(effort === 'high');
     };
 
     context.subscriptions.push(

@@ -60,6 +60,53 @@ describe('AgentLoop progress forwarding', () => {
     expect(executions).toBe(1);
   });
 
+  it('drives the provider when effort changes, and on construction', async () => {
+    const applied: string[] = [];
+    const provider: LLMProvider = {
+      async *streamChat(): AsyncGenerator<LLMEvent> {
+        yield { type: 'done' };
+      },
+      setThinkingEffort(effort) {
+        applied.push(effort);
+      },
+    };
+
+    const loop = new AgentLoop(provider, new ToolRegistry(), [] as Skill[], 8192, 'm', 'p', '', [], 'medium');
+    expect(applied).toEqual(['medium']);
+
+    loop.setThinkingEffort('high');
+    expect(applied).toEqual(['medium', 'high']);
+    expect(loop.getThinkingEffort()).toBe('high');
+  });
+
+  it('accumulates cache token classes across requests', async () => {
+    const provider = providerYielding([
+      [
+        { type: 'usage', inputTokens: 10, outputTokens: 1, cacheReadTokens: 100, cacheWriteTokens: 5 },
+        { type: 'tool_use', id: 't1', name: 'read', input: {} },
+        { type: 'done' },
+      ],
+      [
+        { type: 'usage', inputTokens: 20, outputTokens: 2, cacheReadTokens: 200, cacheWriteTokens: 0 },
+        { type: 'text', text: 'ok' },
+        { type: 'done' },
+      ],
+    ]);
+
+    const registry = new ToolRegistry();
+    registry.register({ name: 'read', description: 'r', parameters: {}, execute: async () => ({ content: 'x' }) });
+
+    const loop = new AgentLoop(provider, registry, [] as Skill[], 8192, 'm', 'p');
+    await loop.run(new ConversationHistory(), 'go', () => {});
+
+    expect(loop.getStatus().tokenUsage).toEqual({
+      inputTokens: 30,
+      outputTokens: 3,
+      cacheReadTokens: 300,
+      cacheWriteTokens: 5,
+    });
+  });
+
   it('keeps progress events out of conversation history', async () => {
     const provider = providerYielding([
       [{ type: 'stream_start' }, { type: 'tool_use_start', id: 't1', name: 'read' }, { type: 'text', text: 'hi' }, { type: 'done' }],
