@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { AgentLoop } from '../agent/loop';
 import { LLMEvent } from '../providers/types';
+import { setBashCwd } from '../tools/bash';
 
 interface StoredSession {
   id: string;
@@ -241,6 +242,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         if (this.onSwitchModel) {
           this.onSwitchModel(newModel);
         }
+        break;
+      }
+
+      case 'setCwd': {
+        const newCwd = message.cwd as string;
+        setBashCwd(newCwd);
+        this.sendStatus();
         break;
       }
 

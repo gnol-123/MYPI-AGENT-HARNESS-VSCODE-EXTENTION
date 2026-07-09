@@ -3,6 +3,7 @@ import { ToolRegistry } from '../tools/registry';
 import { ConversationHistory } from './history';
 import { Skill } from '../skills/loader';
 import { buildSystemPrompt } from './system-prompt';
+import { setBashCwd, getBashCwd } from '../tools/bash';
 
 const MAX_TOOL_ITERATIONS = 25;
 
@@ -35,8 +36,9 @@ export class AgentLoop {
   ) {}
 
   getStatus(): AgentStatus {
+    const cwd = getBashCwd();
     return {
-      cwd: process.cwd(),
+      cwd,
       model: this.modelName,
       provider: this.providerName,
       providerKey: this.providerKey,

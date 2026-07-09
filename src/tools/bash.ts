@@ -5,6 +5,16 @@ const DEFAULT_TIMEOUT = 120_000;
 const MAX_OUTPUT = 50 * 1024;
 const MAX_LINES = 2000;
 
+let activeCwd: string | undefined;
+
+export function setBashCwd(cwd: string): void {
+  activeCwd = cwd;
+}
+
+export function getBashCwd(): string {
+  return activeCwd || process.cwd();
+}
+
 function truncateOutput(text: string): { content: string; truncated: boolean } {
   const lines = text.split('\n');
   let truncated = false;
@@ -46,6 +56,7 @@ export const bashTool: ToolHandler = {
       exec(command, {
         timeout: timeoutMs || DEFAULT_TIMEOUT,
         maxBuffer: 10 * 1024 * 1024,
+        cwd: activeCwd || process.cwd(),
       }, (error: ExecException | null, stdout: string, stderr: string) => {
         const combined = [stdout, stderr].filter(Boolean).join('\n');
         const { content, truncated } = truncateOutput(combined || '(no output)');

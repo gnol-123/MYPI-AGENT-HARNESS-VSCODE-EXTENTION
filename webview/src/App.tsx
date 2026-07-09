@@ -184,6 +184,10 @@ export const App: React.FC = () => {
     vscodeApi.postMessage({ type: 'switchModel', model });
   }, []);
 
+  const setCwd = useCallback((cwd: string) => {
+    vscodeApi.postMessage({ type: 'setCwd', cwd });
+  }, []);
+
   const deleteSession = useCallback((sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     vscodeApi.postMessage({ type: 'deleteSession', sessionId });
@@ -342,7 +346,7 @@ export const App: React.FC = () => {
             </span>
           </div>
         )}
-        <InputBox onSend={sendMessage} disabled={isLoading} availableModels={agentStatus.availableModels} currentModel={agentStatus.model} onSwitchModel={switchModel} />
+        <InputBox onSend={sendMessage} disabled={isLoading} availableModels={agentStatus.availableModels} currentModel={agentStatus.model} onSwitchModel={switchModel} onSetCwd={setCwd} />
       </div>
     </div>
   );

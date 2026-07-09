@@ -35,12 +35,33 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     height: '100%',
+    flexDirection: 'column' as const,
+    gap: '12px',
+    padding: '20px',
+    textAlign: 'center' as const,
+  },
+  emptyLogo: {
+    width: '48px',
+    height: '48px',
+    borderRadius: '12px',
+    background: 'linear-gradient(135deg, #89b4fa, #cba6f7)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '14px',
+    fontWeight: 800,
+    color: '#fff',
+    letterSpacing: '-0.5px',
+  },
+  emptyText: {
     color: 'var(--vscode-descriptionForeground)',
     fontSize: '13px',
-    textAlign: 'center' as const,
-    padding: '20px',
-    flexDirection: 'column' as const,
-    gap: '8px',
+    lineHeight: '1.5',
+  },
+  emptySubtext: {
+    fontSize: '11px',
+    color: 'var(--vscode-descriptionForeground)',
+    opacity: 0.6,
   },
 };
 
@@ -80,16 +101,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isL
     <div style={styles.container}>
       {messages.length === 0 && !streamingText && (
         <div style={styles.emptyState}>
-          <div>Ask me anything about your codebase.</div>
-          <div style={{ fontSize: '11px', opacity: 0.7 }}>I can read, write, edit, and run commands.</div>
+          <div style={styles.emptyLogo}>MYPI</div>
+          <div style={styles.emptyText}>What can I do for you today?</div>
+          <div style={styles.emptySubtext}>I can read, write, edit, run commands, and fetch docs.</div>
         </div>
       )}
 
       {messages.map((msg) => (
-        <div key={msg.id}>
+        <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
           {msg.role === 'user' ? (
             <div className="mypi-msg-user">
-              <div className="mypi-role">You</div>
               {msg.content}
             </div>
           ) : (

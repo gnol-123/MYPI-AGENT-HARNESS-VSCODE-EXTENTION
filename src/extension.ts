@@ -7,7 +7,7 @@ import { ToolRegistry } from './tools/registry';
 import { readTool } from './tools/read';
 import { writeTool } from './tools/write';
 import { editTool } from './tools/edit';
-import { bashTool } from './tools/bash';
+import { bashTool, setBashCwd } from './tools/bash';
 import { webFetchTool } from './tools/web-fetch';
 import { context7Tool } from './tools/context7';
 import { loadSkills } from './skills/loader';
@@ -22,6 +22,12 @@ let currentAgentLoop: AgentLoop | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   try {
+    // Set working directory from workspace
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (workspaceFolder) {
+      setBashCwd(workspaceFolder.uri.fsPath);
+    }
+
     toolRegistry = new ToolRegistry();
     toolRegistry.register(readTool);
     toolRegistry.register(writeTool);

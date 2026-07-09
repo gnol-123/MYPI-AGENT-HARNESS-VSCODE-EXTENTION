@@ -20,6 +20,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { command: '/plan', label: 'Create Plan', description: 'Write an implementation plan', prompt: 'Using brainstorming and writing-plans, create a plan for: ' },
   { command: '/agent', label: 'Agent Prompt', description: 'Full agent instructions mode', prompt: '' },
   { command: '/model', label: 'Switch Model', description: 'Change the AI model', prompt: '' },
+  { command: '/cd', label: 'Change Directory', description: 'Set working directory for shell commands', prompt: '/cd ' },
 ];
 
 interface InputBoxProps {
@@ -28,6 +29,7 @@ interface InputBoxProps {
   availableModels: string[];
   currentModel: string;
   onSwitchModel: (model: string) => void;
+  onSetCwd: (cwd: string) => void;
 }
 
 const styles: Record<string, React.CSSProperties> = {
@@ -195,9 +197,22 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableM
   const handleSend = () => {
     const trimmed = text.trim();
     if (!trimmed || disabled) return;
+
+    // Handle /cd command locally
+    if (trimmed.startsWith('/cd ')) {
+      const dir = trimmed.slice(4).trim();
+      if (dir) {
+        onSetCwd(dir);
+        setText('');
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+      }
+      return;
+    }
+
     onSend(trimmed);
     setText('');
     setShowCommands(false);
+    setShowModels(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
@@ -292,7 +307,8 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableM
   const handleInput = () => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+      const newH = Math.min(textareaRef.current.scrollHeight, 120);
+      textareaRef.current.style.height = newH + 'px';
     }
   };
 
