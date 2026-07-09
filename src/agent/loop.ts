@@ -90,7 +90,6 @@ export class AgentLoop {
     const systemPrompt = buildSystemPrompt(this.skills, undefined, this.thinkingEffort);
     const toolDefs = this.toolRegistry.getAllToolDefs();
     let iterations = 0;
-    let foundSolution = false;
 
     try {
       while (iterations < MAX_TOOL_ITERATIONS) {
@@ -153,10 +152,6 @@ export class AgentLoop {
               this.tokenUsage.cacheWriteTokens += event.cacheWriteTokens ?? 0;
               onEvent(event);
             } else if (event.type === 'tool_use') {
-              if (!foundSolution) {
-                foundSolution = true;
-                onEvent({ type: 'text', text: '__FOUND_SOLUTION__' });
-              }
               toolCalls.push({ id: event.id, name: event.name, input: event.input });
             } else if (event.type === 'error') {
               onEvent(event);

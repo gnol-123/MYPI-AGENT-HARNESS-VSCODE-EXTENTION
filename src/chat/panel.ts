@@ -135,6 +135,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     // doubles the IPC traffic of a stream for no visible benefit.
     let writingLabelSent = false;
     let thinkingLabelSent = false;
+    let foundFlashSent = false;
 
     // Stage timing: "it's slow" is only fixable when we can see WHICH stage is
     // slow. Every turn logs first-byte latency to the "MYPI Perf" output channel.
@@ -157,13 +158,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             this.postMessage({ type: 'statusDot', state: 'working', label: 'Thinking...', sessionId: session.id });
             break;
           case 'tool_use_start':
-            this.postMessage({ type: 'statusDot', state: 'working', label: `Preparing ${event.name}...`, sessionId: session.id });
+            // First tool of the run keeps the "Found solution!" green flash the
+            // __FOUND_SOLUTION__ text sentinel used to deliver (removed: it
+            // polluted the text event channel and every text-event consumer
+            // had to know to filter it).
+            if (!foundFlashSent) {
+              foundFlashSent = true;
+              this.postMessage({ type: 'statusDot', state: 'found', label: 'Found solution!', sessionId: session.id });
+            } else {
+              this.postMessage({ type: 'statusDot', state: 'working', label: `Preparing ${event.name}...`, sessionId: session.id });
+            }
             break;
           case 'text':
-            if (event.text === '__FOUND_SOLUTION__') {
-              this.postMessage({ type: 'statusDot', state: 'found', label: 'Found solution!', sessionId: session.id });
-              return;
-            }
             fullResponse += event.text;
             this.postMessage({
               type: 'assistantStreamChunk',
