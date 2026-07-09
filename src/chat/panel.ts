@@ -237,7 +237,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const queue = this.sessionQueues.get(session.id);
     if (queue && queue.length > 0) {
       const nextText = queue.shift()!;
-      if (queue.length === 0) this.sessionQueues.delete(session.id);
+      const remaining = queue.length;
+      if (remaining === 0) this.sessionQueues.delete(session.id);
+      this.postMessage({ type: 'queueStatus', sessionId: session.id, count: remaining });
       this.sendSessionsList();
       await this.runInSession(session, nextText);
     }

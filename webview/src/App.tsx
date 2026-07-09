@@ -316,6 +316,19 @@ export const App: React.FC = () => {
   })();
 
   const sendMessage = useCallback((text: string) => {
+    // If session is already running, queue locally instead of adding to messages
+    if (runningSessions.has(activeSessionId)) {
+      setQueuedBySession((prev) => {
+        const next = new Map(prev);
+        const q = [...(next.get(activeSessionId) ?? [])];
+        q.push(text);
+        next.set(activeSessionId, q);
+        return next;
+      });
+      vscodeApi.postMessage({ type: 'userMessage', text, sessionId: activeSessionId });
+      return;
+    }
+
     const userMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -326,6 +339,11 @@ export const App: React.FC = () => {
     setStreamingBySession((prev) => new Map(prev).set(activeSessionId, ''));
     setThinkingBySession((prev) => new Map(prev).set(activeSessionId, ''));
     setToolCallsBySession((prev) => new Map(prev).set(activeSessionId, new Map()));
+    setLiveToolResultsBySession((prev) => {
+      const next = new Map(prev);
+      next.delete(activeSessionId);
+      return next;
+    });
     setNeedsApiKey(false);
     setNetworkErrorBySession((prev) => {
       const next = new Map(prev);
@@ -334,9 +352,10 @@ export const App: React.FC = () => {
     });
     setRunningSessions((prev) => new Set(prev).add(activeSessionId));
     setDotStateBySession((prev) => new Map(prev).set(activeSessionId, 'working'));
+    setDotLabelBySession((prev) => new Map(prev).set(activeSessionId, 'Starting...'));
 
     vscodeApi.postMessage({ type: 'userMessage', text, sessionId: activeSessionId });
-  }, [activeSessionId]);
+  }, [activeSessionId, runningSessions]);
 
   const handleAbort = useCallback(() => {
     vscodeApi.postMessage({ type: 'cancelRequest', sessionId: activeSessionId });
@@ -587,8 +606,11 @@ export const App: React.FC = () => {
           setQueuedBySession((prev) => {
             const next = new Map(prev);
             if (msg.count > 0) {
-              // Keep existing queue if count matches, otherwise the backend manages it
-              next.set(msg.sessionId, next.get(msg.sessionId) ?? []);
+              const existing = next.get(msg.sessionId) ?? [];
+              // Trim to match backend count (backend is authoritative)
+              if (existing.length > msg.count) {
+                next.set(msg.sessionId, existing.slice(existing.length - msg.count));
+              }
             } else {
               next.delete(msg.sessionId);
             }
