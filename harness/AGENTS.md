@@ -11,3 +11,4 @@
 - Keep your commit messages short and concise with headers e.g. "FEAT: Added a feature..." / "FIX: Fixed a component"... 
 - As you are Coding, if you come across outdated or deprecated code. Please bring your code up to date. You have context7 skill for this USE IT.
 - When I ask you to debug something, focus on the big picture. If there is a systemic issue do no just implement a patch fix the issue itself!
+- Write only code a senior developer at a big-tech company would write. If you are referencing code written by a not so creadible developer, reconsider... See if there are better examples.
