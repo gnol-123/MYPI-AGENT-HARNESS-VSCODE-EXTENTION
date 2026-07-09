@@ -2,7 +2,7 @@
   "name": "mypi-by-sl",
   "displayName": "MYPI-by-SL",
   "description": "Full AI coding agent inside VS Code - powered by SL's PI",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "publisher": "sl",
   "engines": {
     "vscode": "^1.85.0"

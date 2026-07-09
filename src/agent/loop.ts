@@ -75,6 +75,12 @@ export class AgentLoop {
         if (event.type === 'text') {
           currentText += event.text;
           onEvent(event);
+        } else if (event.type === 'thinking') {
+          onEvent(event);
+        } else if (event.type === 'usage') {
+          this.tokenUsage.inputTokens += event.inputTokens;
+          this.tokenUsage.outputTokens += event.outputTokens;
+          onEvent(event);
         } else if (event.type === 'tool_use') {
           toolCalls.push({ id: event.id, name: event.name, input: event.input });
         } else if (event.type === 'error') {
@@ -83,10 +89,14 @@ export class AgentLoop {
         }
       }
 
-      history.addAssistantMessage(
-        currentText,
-        toolCalls.length > 0 ? toolCalls : undefined,
-      );
+      // A thinking-only turn can produce no visible output; don't store an empty
+      // assistant message, it corrupts the next turn's context.
+      if (currentText || toolCalls.length > 0) {
+        history.addAssistantMessage(
+          currentText,
+          toolCalls.length > 0 ? toolCalls : undefined,
+        );
+      }
 
       if (toolCalls.length === 0) {
         return;

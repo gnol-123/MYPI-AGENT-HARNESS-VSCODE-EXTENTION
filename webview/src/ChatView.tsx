@@ -5,6 +5,8 @@ interface ChatViewProps {
   messages: Message[];
   streamingText: string;
   isLoading: boolean;
+  waiting: boolean;
+  thinking: boolean;
 }
 
 const COLORS: Record<string, string> = {
@@ -90,12 +92,12 @@ const ToolCardComponent: React.FC<{ tc: ToolCallEntry }> = ({ tc }) => {
   );
 };
 
-export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isLoading }) => {
+export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isLoading, waiting, thinking }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingText]);
+  }, [messages, streamingText, waiting]);
 
   return (
     <div style={styles.container}>
@@ -124,6 +126,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isL
           ))}
         </div>
       ))}
+
+      {waiting && (
+        <div style={styles.streaming}>
+          <div className="mypi-role" style={{ color: '#cba6f7' }}>MYPI</div>
+          <div className="mypi-typing">
+            <span className="mypi-typing-dot" />
+            <span className="mypi-typing-dot" />
+            <span className="mypi-typing-dot" />
+            <span className="mypi-typing-label">{thinking ? 'thinking' : 'queued'}</span>
+          </div>
+        </div>
+      )}
 
       {streamingText && (
         <div style={styles.streaming}>

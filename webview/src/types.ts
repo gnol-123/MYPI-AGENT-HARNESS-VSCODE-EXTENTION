@@ -39,6 +39,25 @@ export interface AgentDone {
   sessionId: string;
 }
 
+export interface ThinkingChunk {
+  type: 'thinking';
+  sessionId: string;
+}
+
+export interface SessionUsage {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  lastContextTokens: number;
+}
+
+export interface SessionUsageMsg {
+  type: 'sessionUsage';
+  sessionId: string;
+  usage: SessionUsage;
+  contextPct: number;
+}
+
 export interface SessionsList {
   type: 'sessionsList';
   sessions: SessionInfo[];
@@ -65,7 +84,9 @@ export interface PrefillPrompt {
   text: string;
 }
 
-export type HostToWebview = AssistantStreamChunk | ToolCallStart | ToolCallResult | AgentError | AgentDone | SessionsList | SessionMessages | PrefillPrompt | AgentStatus;
+export type HostToWebview = AssistantStreamChunk | ToolCallStart | ToolCallResult | AgentError | AgentDone | SessionsList | SessionMessages | PrefillPrompt | AgentStatus
+  | ThinkingChunk
+  | SessionUsageMsg;
 export type WebviewToHost = UserMessage | { type: 'cancelRequest' } | { type: 'runCommand'; command: string } | { type: 'switchSession'; sessionId: string } | { type: 'newSession' } | { type: 'deleteSession'; sessionId: string } | { type: 'switchModel'; model: string } | { type: 'setCwd'; cwd: string } | { type: 'clearSession'; sessionId: string };
 
 export interface Message {
@@ -90,4 +111,5 @@ export interface SessionInfo {
   messageCount: number;
   createdAt: number;
   updatedAt: number;
+  usage?: SessionUsage;
 }

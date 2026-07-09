@@ -22,6 +22,8 @@ export interface ToolDef {
 
 export type LLMEvent =
   | { type: 'text'; text: string }
+  | { type: 'thinking'; text: string }
+  | { type: 'usage'; inputTokens: number; outputTokens: number }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
   | { type: 'error'; message: string }
   | { type: 'done' };

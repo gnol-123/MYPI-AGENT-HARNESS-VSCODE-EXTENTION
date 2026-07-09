@@ -1,52 +1,15 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { Skill } from '../skills/loader';
 
-const BASE_PROMPT = `You are MYPI-by-SL, a coding agent running inside VS Code. You help the user with software engineering tasks by reading files, running shell commands, editing code, and writing new files, all from within the editor.
-
-<project_context>
-
-Project-specific instructions and guidelines:
-
-<project_instructions path="AGENTS.md">
-# AGENT GENERAL INSTRUCTIONS FOR SL
-
-# GENERAL GUIDELINES
-- Never use em dashes "--". Just use plain dashes "-".
-- Never add yourself (THE LLM) as a co-author in commit messages
-- When making technical decisions do not give much weight to development cost. Instead prefer quality, simplicity, robustness, and future maintainability
-- When doing bug fixes, always try to replicate the bug in an E2E setting as closely alligned to end use as possible to ensure your solution actually fixes the problem
-- When doing end-to-end testing of a product, be picky about the UI. Be obessed with pixel perfection. If something looks off. FIX it even if it is not what you are currently working on
-- Apply the same high standard to engineering excellence: lint, test failures, and test flakiness. If you see one, even if it is not caused by what you are working on right now, fix it.
-
-</project_instructions>
-
-</project_context>
-
-## Tools
-
-You have access to a set of tools to help answer the user's question:
-
-### read
-Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Output is truncated to 2000 lines or 50KB.
-
-### write
-Write content to a file. Creates the file and parent directories if they don't exist. Automatically creates parent directories.
-
-### edit
-Edit a single file using exact text replacement. Each edits[].oldText must match a unique, non-overlapping region of the original file. If two changes affect the same block or nearby lines, merge them into one edit.
-
-### bash
-Execute a shell command. Use bash for file operations like ls, rg, and find. Prefer rg (ripgrep) over grep, and read files directly with read rather than cat. Output is truncated to 2000 lines or 50KB.
-
-### web_fetch
-Fetch content from a URL and process it. Use for accessing API documentation, web pages, or any web resource.
-
-### context7
-Fetch up-to-date, version-specific documentation and code examples for any library, framework, SDK, API, CLI tool, or cloud service from the Context7 API. Use whenever the user asks how to use a library or for current API syntax.
+// Fallback used only when ~/.pi/agent is not available on this machine.
+const FALLBACK_PROMPT = `You are MYPI-by-SL, a coding agent running inside VS Code. You help the user with software engineering tasks by reading files, running shell commands, editing code, and writing new files, all from within the editor.
 
 ## Tone and style
 - Be concise, direct, and to the point. Match the length of your answer to the task.
 - Minimize preamble and postamble. Do not open with "Great", "Certainly", "Sure", or restate the question back.
-- Output is rendered in a terminal as Markdown. Reference files as clickable paths.
+- Output is rendered as Markdown. Reference files as clickable paths.
 - Explain non-trivial or state-changing shell commands before running them, so the user knows what will happen.
 - Never fabricate results. If a test fails, say so and show the output.
 
@@ -57,7 +20,7 @@ You have a library of skills telling you HOW to approach a task, and using them 
 - The user's instructions always take precedence over any skill.
 
 ## Verification before completion
-Before you claim something is done, fixed, working, or passing, actually verify it: run the build, run the tests, run the linter, or drive the affected flow end-to-end and observe the result. Evidence before assertions, always. If you cannot verify, say what you did and did not check.
+Before you claim something is done, fixed, working, or passing, actually verify it: run the build, run the tests, run the linter, or drive the affected flow end-to-end and observe the result. Evidence before assertions, always.
 
 ## Safety
 - Do what has been asked; nothing more, nothing less.
@@ -65,8 +28,79 @@ Before you claim something is done, fixed, working, or passing, actually verify 
 - Do not commit or push to git unless the user asks.
 `;
 
+const TOOLS_SECTION = `
+
+## Tools
+
+You have access to a set of tools to help answer the user's question:
+
+### read
+Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Output is truncated to 2000 lines or 50KB.
+
+### write
+Write content to a file. Creates the file and parent directories if they don't exist.
+
+### edit
+Edit a single file using exact text replacement. Each edits[].oldText must match a unique, non-overlapping region of the original file.
+
+### bash
+Execute a shell command. Use bash for file operations like ls, rg, and find. Prefer rg (ripgrep) over grep, and read files directly with read rather than cat. Output is truncated to 2000 lines or 50KB.
+
+### web_fetch
+Fetch content from a URL and process it. Use for accessing API documentation, web pages, or any web resource.
+
+### context7
+Fetch up-to-date, version-specific documentation and code examples for any library, framework, SDK, API, CLI tool, or cloud service from the Context7 API. Use whenever the user asks how to use a library or for current API syntax.
+`;
+
+export function piAgentDir(): string {
+  return path.join(os.homedir(), '.pi', 'agent');
+}
+
+interface PiHarness {
+  system?: string;
+  agents?: string;
+}
+
+let cachedHarness: PiHarness | undefined;
+
+/** Reads SYSTEM.md and AGENTS.md from ~/.pi/agent so MYPI runs the same harness as local PI. */
+export function loadPiHarness(): PiHarness {
+  if (cachedHarness) return cachedHarness;
+  const harness: PiHarness = {};
+  for (const [key, file] of [['system', 'SYSTEM.md'], ['agents', 'AGENTS.md']] as const) {
+    try {
+      const content = fs.readFileSync(path.join(piAgentDir(), file), 'utf-8').trim();
+      if (content) harness[key] = content;
+    } catch {
+      // File absent — fall back below.
+    }
+  }
+  cachedHarness = harness;
+  return harness;
+}
+
+/** Test hook / used when the user edits ~/.pi/agent files mid-session. */
+export function resetHarnessCache(): void {
+  cachedHarness = undefined;
+}
+
 export function buildSystemPrompt(skills: Skill[], task?: string): string {
-  let prompt = BASE_PROMPT;
+  const harness = loadPiHarness();
+
+  let prompt: string;
+  if (harness.system) {
+    prompt = harness.system;
+    prompt += `\n\n# Environment\nYou are running as MYPI-by-SL inside a VS Code sidebar (not a terminal). The same tools are available: read, bash, edit, write, plus web_fetch and context7. Markdown output is rendered in the chat panel.`;
+  } else {
+    prompt = FALLBACK_PROMPT;
+  }
+
+  prompt += TOOLS_SECTION;
+
+  if (harness.agents) {
+    prompt += `\n<project_instructions path="~/.pi/agent/AGENTS.md">\n${harness.agents}\n</project_instructions>\n`;
+  }
 
   if (skills.length > 0) {
     prompt += '\n\nThe following skills provide specialized instructions for specific tasks.\n';

@@ -68,6 +68,14 @@ export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
           }
         }
 
+        if (finalMessage.usage) {
+          yield {
+            type: 'usage',
+            inputTokens: finalMessage.usage.input_tokens ?? 0,
+            outputTokens: finalMessage.usage.output_tokens ?? 0,
+          };
+        }
+
         yield { type: 'done' };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

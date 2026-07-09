@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ChatView } from './ChatView';
 import { InputBox } from './InputBox';
-import { Message, HostToWebview, SessionInfo } from './types';
+import { Message, HostToWebview, SessionInfo, SessionUsage } from './types';
 
 const vscodeApi = acquireVsCodeApi();
 
@@ -274,11 +274,15 @@ export const App: React.FC = () => {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [activeSessionId, setActiveSessionId] = useState('');
   const [showHistory, setShowHistory] = useState(false);
+  const [thinkingSessions, setThinkingSessions] = useState<Set<string>>(new Set());
+  const [usageBySession, setUsageBySession] = useState<Map<string, { usage: SessionUsage; contextPct: number }>>(new Map());
   const [showHelp, setShowHelp] = useState(false);
   const [agentStatus, setAgentStatus] = useState({ cwd: '', model: '', provider: '', tokenUsage: { inputTokens: 0, outputTokens: 0 }, availableModels: [] as string[] });
 
   const streamingText = streamingBySession.get(activeSessionId) ?? '';
   const isLoading = streamingBySession.has(activeSessionId);
+  const isThinking = thinkingSessions.has(activeSessionId);
+  const activeUsage = usageBySession.get(activeSessionId);
 
   const sendMessage = useCallback((text: string) => {
     const userMsg: Message = {
@@ -338,6 +342,25 @@ export const App: React.FC = () => {
             next.set(msg.sessionId, (next.get(msg.sessionId) ?? '') + msg.text);
             return next;
           });
+          setThinkingSessions((prev) => {
+            if (!prev.has(msg.sessionId)) return prev;
+            const next = new Set(prev);
+            next.delete(msg.sessionId);
+            return next;
+          });
+          break;
+
+        case 'thinking':
+          setThinkingSessions((prev) => {
+            if (prev.has(msg.sessionId)) return prev;
+            const next = new Set(prev);
+            next.add(msg.sessionId);
+            return next;
+          });
+          break;
+
+        case 'sessionUsage':
+          setUsageBySession((prev) => new Map(prev).set(msg.sessionId, { usage: msg.usage, contextPct: msg.contextPct }));
           break;
 
         case 'toolCallStart':
@@ -382,6 +405,11 @@ export const App: React.FC = () => {
             next.delete(msg.sessionId);
             return next;
           });
+          setThinkingSessions((prev) => {
+            const next = new Set(prev);
+            next.delete(msg.sessionId);
+            return next;
+          });
           break;
         }
 
@@ -411,6 +439,18 @@ export const App: React.FC = () => {
         case 'sessionsList':
           setSessions(msg.sessions);
           setActiveSessionId(msg.activeId);
+          setUsageBySession((prev) => {
+            const next = new Map(prev);
+            for (const info of msg.sessions) {
+              if (info.usage) {
+                next.set(info.id, {
+                  usage: info.usage,
+                  contextPct: Math.min(100, (info.usage.lastContextTokens / 1_000_000) * 100),
+                });
+              }
+            }
+            return next;
+          });
           break;
 
         case 'sessionMessages':
@@ -505,6 +545,8 @@ export const App: React.FC = () => {
           messages={messages}
           streamingText={streamingText}
           isLoading={isLoading}
+          waiting={isLoading && !streamingText}
+          thinking={isThinking}
         />
 
         {showHistory && (
@@ -582,9 +624,9 @@ export const App: React.FC = () => {
               {agentStatus.cwd}
             </span>
             <span style={styles.statusItem}>{agentStatus.provider} · {agentStatus.model}</span>
-            <span style={styles.statusItem}>
-              {agentStatus.tokenUsage.inputTokens + agentStatus.tokenUsage.outputTokens > 0
-                ? `Tokens: ${(agentStatus.tokenUsage.inputTokens + agentStatus.tokenUsage.outputTokens).toLocaleString()}`
+            <span style={styles.statusItem} title="Context used (of 1M tokens) · session cost">
+              {activeUsage
+                ? `${activeUsage.contextPct < 0.1 ? '<0.1' : activeUsage.contextPct.toFixed(1)}% of 1M · $${activeUsage.usage.costUsd.toFixed(4)}`
                 : ''}
             </span>
           </div>

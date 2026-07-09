@@ -96,6 +96,51 @@ describe('AgentLoop', () => {
     expect(seenMessageCounts[1]).toBe(3); // user, assistant, user
   });
 
+  it('forwards thinking events without storing them in history', async () => {
+    const provider = createMockProvider([
+      [
+        { type: 'thinking', text: 'pondering...' },
+        { type: 'text', text: 'answer' },
+        { type: 'done' },
+      ],
+    ]);
+    const loop = new AgentLoop(provider, new ToolRegistry(), [], 8192);
+    const history = new ConversationHistory();
+    const events: LLMEvent[] = [];
+    await loop.run(history, 'Hi', (event) => events.push(event));
+
+    expect(events.some((e) => e.type === 'thinking')).toBe(true);
+    const flat = JSON.stringify(history.getMessages());
+    expect(flat).not.toContain('pondering');
+  });
+
+  it('does not store an empty assistant message for thinking-only turns', async () => {
+    const provider = createMockProvider([[{ type: 'done' }]]);
+    const loop = new AgentLoop(provider, new ToolRegistry(), [], 8192);
+    const history = new ConversationHistory();
+    await loop.run(history, 'Hi', () => {});
+
+    const messages = history.getMessages();
+    expect(messages).toHaveLength(1);
+    expect(messages[0].role).toBe('user');
+  });
+
+  it('accumulates usage events into token counters', async () => {
+    const provider = createMockProvider([
+      [
+        { type: 'text', text: 'ok' },
+        { type: 'usage', inputTokens: 120, outputTokens: 30 },
+        { type: 'done' },
+      ],
+    ]);
+    const loop = new AgentLoop(provider, new ToolRegistry(), [], 8192);
+    const events: LLMEvent[] = [];
+    await loop.run(new ConversationHistory(), 'Hi', (event) => events.push(event));
+
+    expect(loop.getStatus().tokenUsage).toEqual({ inputTokens: 120, outputTokens: 30 });
+    expect(events.some((e) => e.type === 'usage')).toBe(true);
+  });
+
   it('should handle errors from provider', async () => {
     const provider = createMockProvider([
       [{ type: 'error', message: 'Rate limited' }],

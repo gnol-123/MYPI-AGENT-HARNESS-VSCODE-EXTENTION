@@ -11,6 +11,8 @@ import { bashTool, setBashCwd } from './tools/bash';
 import { webFetchTool } from './tools/web-fetch';
 import { context7Tool } from './tools/context7';
 import { loadSkills } from './skills/loader';
+import { piAgentDir, resetHarnessCache } from './agent/system-prompt';
+import * as fs from 'fs';
 import { createAnthropicProvider } from './providers/anthropic';
 import { createOpenAICompatProvider } from './providers/openai-compat';
 import { LLMProvider } from './providers/types';
@@ -37,7 +39,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     toolRegistry.register(context7Tool);
 
     const config = getConfig();
-    skillsPath = config.skillsPath || path.join(context.extensionPath, 'skills');
+    // Parity with local PI: prefer the live skill library in ~/.pi/agent/skills,
+    // fall back to the bundled snapshot.
+    const piSkills = path.join(piAgentDir(), 'skills');
+    skillsPath = config.skillsPath || (fs.existsSync(piSkills) ? piSkills : path.join(context.extensionPath, 'skills'));
 
     chatProvider = new ChatViewProvider(context.extensionUri);
     chatProvider.setState(context.globalState);
@@ -185,6 +190,7 @@ async function createAgentLoop(context: vscode.ExtensionContext, modelOverride?:
     provider = createOpenAICompatProvider({ apiKey, model, baseUrl: endpoint });
   }
 
+  resetHarnessCache(); // pick up edits to ~/.pi/agent/SYSTEM.md / AGENTS.md
   const skills = await loadSkills(skillsPath);
 
   return new AgentLoop(provider, toolRegistry, skills, config.maxTokens, model, preset.name, config.provider, preset.models);

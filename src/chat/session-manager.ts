@@ -12,6 +12,18 @@ export interface DisplayMessage {
   timestamp: number;
 }
 
+export interface SessionUsage {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  /** Tokens in the most recent request+response: how full the context is. */
+  lastContextTokens: number;
+}
+
+export function emptyUsage(): SessionUsage {
+  return { inputTokens: 0, outputTokens: 0, costUsd: 0, lastContextTokens: 0 };
+}
+
 export interface Session {
   id: string;
   name: string;
@@ -19,6 +31,7 @@ export interface Session {
   history: ConversationHistory;
   createdAt: number;
   updatedAt: number;
+  usage: SessionUsage;
 }
 
 export interface SessionInfo {
@@ -27,6 +40,7 @@ export interface SessionInfo {
   messageCount: number;
   createdAt: number;
   updatedAt: number;
+  usage: SessionUsage;
 }
 
 interface SerializedSession {
@@ -36,6 +50,7 @@ interface SerializedSession {
   historyMessages: Message[];
   createdAt: number;
   updatedAt: number;
+  usage?: SessionUsage;
 }
 
 interface SerializedState {
@@ -92,6 +107,7 @@ export class SessionManager {
       history: new ConversationHistory(),
       createdAt: stamp,
       updatedAt: stamp,
+      usage: emptyUsage(),
     };
     this.sessions.set(session.id, session);
     this._activeId = session.id;
@@ -121,6 +137,7 @@ export class SessionManager {
         messageCount: s.messages.length,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
+        usage: { ...s.usage },
       }));
   }
 
@@ -140,11 +157,22 @@ export class SessionManager {
     this.save();
   }
 
+  addUsage(sessionId: string, inputTokens: number, outputTokens: number, turnCostUsd: number | undefined): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    session.usage.inputTokens += inputTokens;
+    session.usage.outputTokens += outputTokens;
+    if (turnCostUsd !== undefined) session.usage.costUsd += turnCostUsd;
+    session.usage.lastContextTokens = inputTokens + outputTokens;
+    this.save();
+  }
+
   clear(sessionId: string): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
     session.messages = [];
     session.history.clear();
+    session.usage = emptyUsage();
     session.updatedAt = this.now();
     this.save();
   }
@@ -160,6 +188,7 @@ export class SessionManager {
         historyMessages: s.history.toJSON(),
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
+        usage: s.usage,
       })),
     };
     try {
@@ -183,6 +212,7 @@ export class SessionManager {
             history: ConversationHistory.fromJSON(s.historyMessages),
             createdAt: s.createdAt,
             updatedAt: s.updatedAt,
+            usage: s.usage ?? emptyUsage(),
           },
         ]),
       );
@@ -208,6 +238,7 @@ export class SessionManager {
           history,
           createdAt: old.createdAt,
           updatedAt: old.createdAt,
+          usage: emptyUsage(),
         });
       }
       this._activeId = this.list()[0].id;

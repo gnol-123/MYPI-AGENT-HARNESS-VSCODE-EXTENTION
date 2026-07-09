@@ -3,6 +3,7 @@ import { AgentLoop } from '../agent/loop';
 import { LLMEvent } from '../providers/types';
 import { setBashCwd } from '../tools/bash';
 import { SessionManager, Session } from './session-manager';
+import { costUsd, CONTEXT_WINDOW } from '../pricing';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   public static currentProvider: ChatViewProvider | undefined;
@@ -127,6 +128,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               sessionId: session.id,
             });
             break;
+          case 'thinking':
+            this.postMessage({ type: 'thinking', sessionId: session.id });
+            break;
+          case 'usage': {
+            const model = this.agentLoop!.getStatus().model;
+            const turnCost = costUsd(model, event.inputTokens, event.outputTokens);
+            this.sessionManager.addUsage(session.id, event.inputTokens, event.outputTokens, turnCost);
+            const usage = this.sessionManager.get(session.id)!.usage;
+            this.postMessage({
+              type: 'sessionUsage',
+              sessionId: session.id,
+              usage,
+              contextPct: Math.min(100, (usage.lastContextTokens / CONTEXT_WINDOW) * 100),
+            });
+            break;
+          }
           case 'tool_use':
             this.postMessage({
               type: 'toolCallStart',
@@ -290,6 +307,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes toolPulse { 0%, 100% { box-shadow: 0 0 4px currentColor; } 50% { box-shadow: 0 0 14px currentColor; } }
     @keyframes popIn { from { opacity: 0; transform: translateY(4px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes blinkDot { 0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); } 40% { opacity: 1; transform: scale(1); } }
+    .mypi-typing { display: flex; align-items: center; gap: 4px; padding: 4px 0; }
+    .mypi-typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mypi-accent); animation: blinkDot 1.2s ease-in-out infinite; }
+    .mypi-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .mypi-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    .mypi-typing-label { margin-left: 6px; font-size: 10.5px; color: var(--vscode-descriptionForeground, #a6adc8); font-style: italic; }
     #error-screen { display: none; align-items: center; justify-content: center; height: 100%; flex-direction: column; gap: 8px; padding: 24px; text-align: center; }
     #error-screen .err-title { color: var(--mypi-red); font-weight: 600; font-size: 14px; }
     #error-screen .err-msg { color: var(--vscode-descriptionForeground, #a6adc8); font-size: 12px; line-height: 1.5; }

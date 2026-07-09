@@ -85,6 +85,7 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
           ],
           max_tokens: maxTokens,
           stream: true,
+          stream_options: { include_usage: true },
         };
 
         if (tools.length > 0) {
@@ -139,10 +140,21 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
 
             try {
               const parsed = JSON.parse(data);
+              if (parsed.usage) {
+                yield {
+                  type: 'usage',
+                  inputTokens: parsed.usage.prompt_tokens ?? 0,
+                  outputTokens: parsed.usage.completion_tokens ?? 0,
+                };
+              }
               const choice = parsed.choices?.[0];
               if (!choice) continue;
 
               const delta = choice.delta;
+
+              if (delta?.reasoning_content) {
+                yield { type: 'thinking', text: delta.reasoning_content };
+              }
 
               if (delta?.content) {
                 yield { type: 'text', text: delta.content };
