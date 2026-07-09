@@ -147,10 +147,22 @@ export function createAnthropicProvider(config: AnthropicConfig): LLMProvider {
         }
 
         const finalMessage = await stream.finalMessage();
+        // A turn cut off at max_tokens ends with tool arguments truncated
+        // mid-JSON; executing them would fail with misleading "missing
+        // parameter" errors, so flag the cause instead.
+        const truncated = (finalMessage as any).stop_reason === 'max_tokens';
         for (const block of finalMessage.content) {
           if ((block as any).type === 'tool_use') {
             const tb = block as any;
-            yield { type: 'tool_use', id: tb.id, name: tb.name, input: tb.input as Record<string, unknown> };
+            yield {
+              type: 'tool_use',
+              id: tb.id,
+              name: tb.name,
+              input: tb.input as Record<string, unknown>,
+              ...(truncated
+                ? { argsError: 'the response hit the output token limit (max_tokens) and the tool arguments were truncated' }
+                : {}),
+            };
           }
         }
 

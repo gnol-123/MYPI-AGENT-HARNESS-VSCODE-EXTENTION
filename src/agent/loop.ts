@@ -96,7 +96,7 @@ export class AgentLoop {
         if (signal.aborted) break;
         iterations++;
 
-        const toolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
+        const toolCalls: Array<{ id: string; name: string; input: Record<string, unknown>; argsError?: string }> = [];
         let currentText = '';
 
         let stream: AsyncIterable<LLMEvent> | undefined;
@@ -152,7 +152,7 @@ export class AgentLoop {
               this.tokenUsage.cacheWriteTokens += event.cacheWriteTokens ?? 0;
               onEvent(event);
             } else if (event.type === 'tool_use') {
-              toolCalls.push({ id: event.id, name: event.name, input: event.input });
+              toolCalls.push({ id: event.id, name: event.name, input: event.input, argsError: event.argsError });
             } else if (event.type === 'error') {
               onEvent(event);
               return;
@@ -200,6 +200,20 @@ export class AgentLoop {
         for (const tc of toolCalls) {
           if (signal.aborted) break;
           onEvent({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.input });
+
+          // Broken arguments must not reach the tool — it would fail with a
+          // misleading "missing parameter" error and the model would retry the
+          // same call verbatim. Name the real cause and the way out.
+          if (tc.argsError) {
+            const errMsg =
+              `Error: tool call not executed — ${tc.argsError}. ` +
+              `Do NOT retry the same call. Produce less output per call: ` +
+              `write the file in smaller pieces (an initial write followed by edit calls appending sections), ` +
+              `or reduce the content size.`;
+            onEvent({ type: 'tool_result', id: tc.id, result: errMsg, isError: true });
+            history.addToolResult(tc.id, errMsg, true);
+            continue;
+          }
 
           try {
             const result = await this.toolRegistry.execute(tc.name, tc.input);

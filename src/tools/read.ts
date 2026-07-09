@@ -64,7 +64,8 @@ export const readTool: ToolHandler = {
 
   async execute(params: Record<string, unknown>): Promise<ToolResult> {
     try {
-      const filePath = params.path as string;
+      // Models trained on Claude Code tooling often emit file_path.
+      const filePath = (params.path ?? params.file_path ?? params.filePath) as string;
       if (!filePath) {
         return { content: '', error: 'Missing required parameter: path' };
       }

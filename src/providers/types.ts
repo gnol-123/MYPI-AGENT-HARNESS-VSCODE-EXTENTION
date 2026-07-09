@@ -30,7 +30,10 @@ export type LLMEvent =
   // Exactly one per request. Providers report usage cumulatively, often on
   // several chunks, so a provider must emit only its final tally.
   | { type: 'usage'; inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number }
-  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  // argsError: the arguments could not be parsed (usually truncated at the
+  // output token limit). The loop must not execute the tool; it reports the
+  // cause to the model instead so it can retry differently.
+  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown>; argsError?: string }
   | { type: 'tool_result'; id: string; result: string; truncated?: boolean; isError?: boolean }
   | { type: 'error'; message: string }
   | { type: 'done' };

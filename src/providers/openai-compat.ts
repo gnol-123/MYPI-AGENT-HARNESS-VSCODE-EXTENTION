@@ -166,6 +166,7 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
 
         const toolCalls: Map<number, { id: string; name: string; arguments: string }> = new Map();
         const announced = new Set<number>();
+        let finishReason: string | undefined;
         // Usage arrives cumulatively and often on more than one chunk. Keep the
         // last tally and emit it once, or the totals compound.
         let lastUsage: Record<string, any> | undefined;
@@ -195,6 +196,7 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
               }
               const choice = choices[0];
               if (!choice) continue;
+              if (choice.finish_reason) finishReason = choice.finish_reason;
 
               const delta = choice.delta;
 
@@ -235,7 +237,12 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
             const input = JSON.parse(tc.arguments);
             yield { type: 'tool_use', id: tc.id, name: tc.name, input };
           } catch {
-            yield { type: 'tool_use', id: tc.id, name: tc.name, input: {} };
+            // Never pass {} silently — the tool would fail with a misleading
+            // "missing parameter" error and the model would retry identically.
+            const cause = finishReason === 'length'
+              ? 'the response hit the output token limit (max_tokens) and the tool arguments were truncated mid-JSON'
+              : 'the tool arguments were not valid JSON';
+            yield { type: 'tool_use', id: tc.id, name: tc.name, input: {}, argsError: cause };
           }
         }
 
