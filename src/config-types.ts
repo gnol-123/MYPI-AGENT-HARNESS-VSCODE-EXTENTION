@@ -20,14 +20,14 @@ export interface ProviderPreset {
 export const PROVIDER_PRESETS: Record<Provider, ProviderPreset> = {
   anthropic: {
     name: 'Anthropic (Claude)',
-    defaultModel: 'claude-sonnet-4-20250514',
+    defaultModel: 'claude-sonnet-5',
     defaultEndpoint: '',
     needsApiKey: true,
     models: [
+      'claude-sonnet-5',
+      'claude-opus-4-8',
+      'claude-haiku-4-5-20251001',
       'claude-sonnet-4-20250514',
-      'claude-3-5-sonnet-20241022',
-      'claude-3-5-haiku-20241022',
-      'claude-3-opus-20240229',
     ],
   },
   openai: {
@@ -55,13 +55,15 @@ export const PROVIDER_PRESETS: Record<Provider, ProviderPreset> = {
   },
   'z-ai': {
     name: 'Z.AI',
-    defaultModel: 'glm-4-flash',
-    defaultEndpoint: 'https://api.z.ai/v1',
+    defaultModel: 'glm-4.6',
+    defaultEndpoint: 'https://api.z.ai/api/paas/v4',
     needsApiKey: true,
     models: [
-      'glm-4-flash',
-      'glm-4-plus',
-      'glm-4-air',
+      'glm-4.7',
+      'glm-4.6',
+      'glm-4.5',
+      'glm-4.5-air',
+      'glm-4.5-flash',
     ],
   },
   together: {

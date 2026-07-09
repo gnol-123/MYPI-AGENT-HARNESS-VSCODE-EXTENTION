@@ -5,7 +5,7 @@ describe('buildConfig', () => {
   it('should construct config from settings', () => {
     const settings = {
       'mypi-by-sl.provider': 'anthropic',
-      'mypi-by-sl.model': 'claude-sonnet-4-20250514',
+      'mypi-by-sl.model': 'claude-sonnet-5',
       'mypi-by-sl.apiEndpoint': '',
       'mypi-by-sl.maxTokens': 8192,
       'mypi-by-sl.toolTimeout': 120,
@@ -15,7 +15,7 @@ describe('buildConfig', () => {
     const config = buildConfig(settings);
 
     expect(config.provider).toBe('anthropic');
-    expect(config.model).toBe('claude-sonnet-4-20250514');
+    expect(config.model).toBe('claude-sonnet-5');
     expect(config.maxTokens).toBe(8192);
     expect(config.toolTimeout).toBe(120);
   });
@@ -74,13 +74,13 @@ describe('PROVIDER_PRESETS', () => {
 
   it('should have default endpoints for OpenAI-compatible providers', () => {
     expect(PROVIDER_PRESETS.deepseek.defaultEndpoint).toBe('https://api.deepseek.com/v1');
-    expect(PROVIDER_PRESETS['z-ai'].defaultEndpoint).toBe('https://api.z.ai/v1');
+    expect(PROVIDER_PRESETS['z-ai'].defaultEndpoint).toBe('https://api.z.ai/api/paas/v4');
     expect(PROVIDER_PRESETS.together.defaultEndpoint).toBe('https://api.together.xyz/v1');
     expect(PROVIDER_PRESETS.openai.defaultEndpoint).toBe('https://api.openai.com/v1');
   });
 
   it('should have default models', () => {
     expect(PROVIDER_PRESETS.deepseek.defaultModel).toBe('deepseek-v4-pro');
-    expect(PROVIDER_PRESETS.anthropic.defaultModel).toBe('claude-sonnet-4-20250514');
+    expect(PROVIDER_PRESETS.anthropic.defaultModel).toBe('claude-sonnet-5');
   });
 });

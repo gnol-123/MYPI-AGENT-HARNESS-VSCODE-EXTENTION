@@ -102,7 +102,11 @@ export function createOpenAICompatProvider(config: OpenAICompatConfig): LLMProvi
         });
 
         if (!response.ok) {
-          const errorText = await response.text();
+          let errorText = await response.text();
+          // HTML error pages (nginx etc.) are noise — report the URL instead.
+          if (errorText.trimStart().startsWith('<')) {
+            errorText = `${baseUrl}/chat/completions — the endpoint URL or model may be wrong. Check the provider/apiEndpoint settings.`;
+          }
           yield { type: 'error', message: `HTTP ${response.status}: ${errorText}` };
           return;
         }
