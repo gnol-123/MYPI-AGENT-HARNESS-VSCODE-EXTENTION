@@ -140,6 +140,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.postMessage({ type: 'statusDot', state: 'working', label: 'Starting...', sessionId: session.id });
 
     let fullResponse = '';
+    let thinkingText = '';
     let aborted = false;
 
     try {
@@ -159,6 +160,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             this.postMessage({ type: 'statusDot', state: 'working', label: 'Writing response...', sessionId: session.id });
             break;
           case 'thinking':
+            thinkingText += event.text;
             this.postMessage({ type: 'thinking', sessionId: session.id, text: event.text });
             this.postMessage({ type: 'statusDot', state: 'working', label: 'Thinking...', sessionId: session.id });
             break;
@@ -231,8 +233,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       this.runningSessions.delete(session.id);
     }
 
-    if (!aborted && fullResponse) {
-      this.sessionManager.addMessage(session.id, 'assistant', fullResponse);
+    if (!aborted && (fullResponse || thinkingText)) {
+      const finalContent = thinkingText
+        ? `> ${thinkingText.replace(/\n/g, '\n> ')}\n\n${fullResponse}`
+        : fullResponse;
+      this.sessionManager.addMessage(session.id, 'assistant', finalContent);
     }
     this.postMessage({
       type: 'done',
@@ -376,12 +381,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
 
         if (this.runningSessions.has(session.id)) {
-          // Queue the message instead of blocking
+          // Queue the message — don't touch session state, don't interrupt the running stream
           const queue = this.sessionQueues.get(session.id) || [];
           queue.push(text);
           this.sessionQueues.set(session.id, queue);
           this.postMessage({ type: 'queueStatus', sessionId: session.id, count: queue.length });
-          this.sendSessionsList();
           return;
         }
 
@@ -503,12 +507,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     .mypi-thinking-block {
       margin: 4px 0 0 4px;
       border-left: 2px solid rgba(203,166,247,0.4);
-      padding: 4px 8px;
-      font-size: 11px;
+      padding: 6px 10px;
+      font-size: 12px;
       font-style: italic;
-      color: var(--vscode-descriptionForeground);
-      opacity: 0.85;
-      line-height: 1.45;
+      color: #b4b9d0;
+      line-height: 1.55;
       white-space: pre-wrap;
       word-break: break-word;
     }

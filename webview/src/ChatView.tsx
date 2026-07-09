@@ -74,11 +74,11 @@ const styles: Record<string, React.CSSProperties> = {
 };
 
 const ToolCardComponent: React.FC<{ tc: ToolCallEntry }> = ({ tc }) => {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const color = COLORS[tc.name] ?? '#888';
 
   const paramsStr = Object.entries(tc.params)
-    .map(([k, v]) => `${k}=${typeof v === 'string' ? v.slice(0, 40) : JSON.stringify(v).slice(0, 40)}`)
+    .map(([k, v]) => `${k}=${typeof v === 'string' ? v.slice(0, 80) : JSON.stringify(v).slice(0, 80)}`)
     .join(', ');
 
   return (
@@ -91,8 +91,8 @@ const ToolCardComponent: React.FC<{ tc: ToolCallEntry }> = ({ tc }) => {
           {expanded ? '▼' : '▶'}
         </span>
       </div>
-      {expanded && tc.result !== undefined && (
-        <div className="mypi-tool-result" style={tc.isError ? { color: '#f38ba8' } : undefined}>{tc.result || '(no output)'}</div>
+      {expanded && (
+        <div className="mypi-tool-result" style={{ maxHeight: '320px', ...(tc.isError ? { color: '#f38ba8' } : {}) }}>{tc.result !== undefined ? tc.result : '(running...)'}</div>
       )}
     </div>
   );
@@ -268,7 +268,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ messages, streamingText, isL
             }
             if (block.type === 'thinking') {
               return (
-                <div key={block.id} className="mypi-thinking-block">
+                <div key={block.id} style={{
+                  margin: '4px 0 0 4px',
+                  borderLeft: '2px solid rgba(203,166,247,0.4)',
+                  padding: '6px 10px',
+                  fontSize: '12px',
+                  fontStyle: 'italic',
+                  color: '#b4b9d0',
+                  lineHeight: '1.55',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}>
                   {block.text}
                 </div>
               );

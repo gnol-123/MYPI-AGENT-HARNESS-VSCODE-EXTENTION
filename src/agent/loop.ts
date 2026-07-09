@@ -219,6 +219,10 @@ export class AgentLoop {
           }
         }
       }
+      // Loop ended — either tasks complete or hit max iterations
+      if (iterations >= MAX_TOOL_ITERATIONS) {
+        onEvent({ type: 'text', text: `\n\n*(Reached max ${MAX_TOOL_ITERATIONS} tool iterations — task may be incomplete)*` });
+      }
     } finally {
       this.abortController = undefined;
     }
