@@ -347,11 +347,8 @@ export const App: React.FC = () => {
       next.delete(activeSessionId);
       return next;
     });
-    setStreamBlocksBySession((prev) => {
-      const next = new Map(prev);
-      next.delete(activeSessionId);
-      return next;
-    });
+    // Don't clear stream blocks here - keep previous run's thinking visible
+    // until the new run produces output (first assistantStreamChunk clears them)
     setNeedsApiKey(false);
     setNetworkErrorBySession((prev) => {
       const next = new Map(prev);
@@ -463,7 +460,12 @@ export const App: React.FC = () => {
           // Append to stream blocks for inline ordering
           setStreamBlocksBySession((prev) => {
             const next = new Map(prev);
-            const blocks = [...(next.get(msg.sessionId) ?? [])];
+            let blocks = next.get(msg.sessionId) ?? [];
+            // If all existing blocks are completed (from a previous run), clear them for the new run
+            if (blocks.length > 0 && blocks.every((b) => b.completed)) {
+              blocks = [];
+            }
+            blocks = [...blocks];
             const last = blocks[blocks.length - 1];
             if (last && last.type === 'text' && !last.completed) {
               blocks[blocks.length - 1] = { ...last, text: (last.text ?? '') + msg.text };
@@ -534,19 +536,24 @@ export const App: React.FC = () => {
         case 'done': {
           if (msg.sessionId === activeSessionId) {
             const finalText = streamingBySession.get(msg.sessionId) ?? '';
+            const thinkText = thinkingBySession.get(msg.sessionId) ?? '';
             const inner = toolCallsBySession.get(msg.sessionId) ?? new Map();
             const toolCalls = Array.from(inner.entries()).map(([id, tc]) => ({
               id,
               name: tc.name,
               params: tc.params,
             }));
-            if (finalText || toolCalls.length > 0) {
+            // Build content with thinking preserved as blockquote
+            const content = thinkText
+              ? `> ${thinkText.replace(/\n/g, '\n> ')}\n\n${finalText}`
+              : finalText;
+            if (content || toolCalls.length > 0) {
               setMessages((prev) => [
                 ...prev,
                 {
                   id: msg.turnId,
                   role: 'assistant',
-                  content: finalText,
+                  content,
                   toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
                   timestamp: Date.now(),
                 },
@@ -588,16 +595,7 @@ export const App: React.FC = () => {
             next.delete(msg.sessionId);
             return next;
           });
-          // Mark stream blocks as completed and clear on next run
-          setStreamBlocksBySession((prev) => {
-            const next = new Map(prev);
-            const blocks = next.get(msg.sessionId);
-            if (blocks) {
-              const updated = blocks.map((b) => ({ ...b, completed: true }));
-              next.set(msg.sessionId, updated);
-            }
-            return next;
-          });
+          // Don't clear stream blocks — keep thinking/tools visible after done
           break;
         }
 
