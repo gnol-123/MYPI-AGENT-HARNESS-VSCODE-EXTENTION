@@ -10,6 +10,10 @@ interface SlashCommand {
 }
 
 const SLASH_COMMANDS: SlashCommand[] = [
+  { command: '/new', label: 'New Chat', description: 'Start a new chat session', prompt: '' },
+  { command: '/resume', label: 'Resume', description: 'Browse and reopen past sessions', prompt: '' },
+  { command: '/clear', label: 'Clear', description: 'Clear the current session', prompt: '' },
+  { command: '/help', label: 'Help', description: 'Show commands, keybindings, and status', prompt: '' },
   { command: '/design', label: 'Design UI', description: 'Create or redesign UI with frontend design skill', prompt: 'Using frontend-design and lavish skills, design a UI for: ' },
   { command: '/fix', label: 'Fix Bug', description: 'Debug and fix an issue systematically', prompt: 'Using systematic-debugging skill, fix this bug: ' },
   { command: '/explain', label: 'Explain Code', description: 'Explain what this code does', prompt: 'Explain this code in detail: ' },
@@ -30,6 +34,10 @@ interface InputBoxProps {
   currentModel: string;
   onSwitchModel: (model: string) => void;
   onSetCwd: (cwd: string) => void;
+  onNewSession: () => void;
+  onShowHistory: () => void;
+  onClearSession: () => void;
+  onShowHelp: () => void;
 }
 
 const styles: Record<string, React.CSSProperties> = {
@@ -137,7 +145,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableModels, currentModel }) => {
+export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableModels, currentModel, onSwitchModel, onSetCwd, onNewSession, onShowHistory, onClearSession, onShowHelp }) => {
   const [text, setText] = useState('');
   const [showCommands, setShowCommands] = useState(false);
   const [filteredCommands, setFilteredCommands] = useState<SlashCommand[]>([]);
@@ -163,6 +171,18 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableM
   }, []);
 
   const insertCommand = useCallback((cmd: SlashCommand) => {
+    const actions: Record<string, () => void> = {
+      '/new': onNewSession,
+      '/resume': onShowHistory,
+      '/clear': onClearSession,
+      '/help': onShowHelp,
+    };
+    if (actions[cmd.command]) {
+      actions[cmd.command]();
+      setText('');
+      setShowCommands(false);
+      return;
+    }
     if (cmd.command === '/model') {
       // Show model list instead of inserting text
       setShowModels(true);
@@ -192,7 +212,7 @@ export const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, availableM
         textareaRef.current.focus();
       }
     }, 0);
-  }, [text, availableModels]);
+  }, [text, availableModels, onNewSession, onShowHistory, onClearSession, onShowHelp]);
 
   const handleSend = () => {
     const trimmed = text.trim();

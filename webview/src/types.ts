@@ -57,6 +57,7 @@ export interface AgentStatus {
   model: string;
   provider: string;
   tokenUsage: { inputTokens: number; outputTokens: number };
+  availableModels?: string[];
 }
 
 export interface PrefillPrompt {
