@@ -435,8 +435,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     #loading { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--vscode-descriptionForeground, #a6adc8); font-size: 13px; flex-direction: column; gap: 12px; }
     #loading .spinner { width: 24px; height: 24px; border: 2px solid var(--vscode-input-border, #45475a); border-top-color: var(--mypi-accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes toolPulse { 0%, 100% { box-shadow: 0 0 6px currentColor, 0 0 12px currentColor; } 50% { box-shadow: 0 0 2px currentColor, 0 0 4px currentColor; } }
-    @keyframes toolNamePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    @keyframes toolBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
+    @keyframes toolNameBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
     @keyframes popIn { from { opacity: 0; transform: translateY(4px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
     @keyframes blinkDot { 0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); } 40% { opacity: 1; transform: scale(1); } }
     .mypi-typing { display: flex; align-items: center; gap: 4px; padding: 4px 0; }
@@ -498,8 +498,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     .mypi-tool-dot.edit { background: var(--mypi-yellow); color: var(--mypi-yellow); }
     .mypi-tool-dot.bash { background: var(--mypi-teal); color: var(--mypi-teal); }
     .mypi-tool-dot.context7 { background: var(--mypi-mauve); color: var(--mypi-mauve); }
-    .mypi-tool-card.executing .mypi-tool-dot { animation: toolPulse 0.8s ease-in-out infinite; }
-    .mypi-tool-card.executing .mypi-tool-name { animation: toolNamePulse 1s ease-in-out infinite; }
+    .mypi-tool-card.executing .mypi-tool-dot { animation: toolBlink 0.6s ease-in-out infinite; }
+    .mypi-tool-card.executing .mypi-tool-name { animation: toolNameBlink 0.8s ease-in-out infinite; }
     .mypi-tool-name { font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; }
     .mypi-tool-name.read { color: var(--mypi-blue); }
     .mypi-tool-name.write { color: var(--mypi-green); }

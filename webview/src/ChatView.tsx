@@ -76,16 +76,25 @@ const styles: Record<string, React.CSSProperties> = {
 const ToolCardComponent: React.FC<{ tc: ToolCallEntry }> = ({ tc }) => {
   const [expanded, setExpanded] = useState(true);
   const color = COLORS[tc.name] ?? '#888';
+  const isExecuting = tc.result === undefined;
 
   const paramsStr = Object.entries(tc.params)
     .map(([k, v]) => `${k}=${typeof v === 'string' ? v.slice(0, 80) : JSON.stringify(v).slice(0, 80)}`)
     .join(', ');
 
+  const blinkStyle: React.CSSProperties = isExecuting ? {
+    animation: 'toolBlink 0.6s ease-in-out infinite',
+  } : {};
+
+  const nameBlinkStyle: React.CSSProperties = isExecuting ? {
+    animation: 'toolNameBlink 0.8s ease-in-out infinite',
+  } : {};
+
   return (
-    <div className={`mypi-tool-card ${!tc.result ? 'executing' : ''}`}>
+    <div className={`mypi-tool-card ${isExecuting ? 'executing' : ''}`}>
       <div className="mypi-tool-header" onClick={() => setExpanded(!expanded)}>
-        <span className={`mypi-tool-dot ${tc.name}`} style={{ background: color, color }}></span>
-        <span className={`mypi-tool-name ${tc.name}`} style={{ color }}>{tc.name}</span>
+        <span className={`mypi-tool-dot ${tc.name}`} style={{ background: color, color, ...blinkStyle }}></span>
+        <span className={`mypi-tool-name ${tc.name}`} style={{ color, ...nameBlinkStyle }}>{tc.name}</span>
         <span className="mypi-tool-params">{paramsStr}</span>
         <span style={{ marginLeft: 'auto', fontSize: '9px', color: 'var(--vscode-descriptionForeground)' }}>
           {expanded ? '▼' : '▶'}
