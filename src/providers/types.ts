@@ -35,6 +35,8 @@ export type LLMEvent =
   // cause to the model instead so it can retry differently.
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown>; argsError?: string }
   | { type: 'tool_result'; id: string; result: string; truncated?: boolean; isError?: boolean }
+  | { type: 'compaction_start'; droppedTurns: number }
+  | { type: 'compaction_done'; droppedTurns: number; beforeTokens: number; afterTokens: number }
   | { type: 'error'; message: string }
   | { type: 'done' };
 

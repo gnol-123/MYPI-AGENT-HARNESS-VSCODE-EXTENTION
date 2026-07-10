@@ -300,6 +300,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               this.postMessage({ type: 'statusDot', state: 'found', label: 'Found solution!', sessionId: session.id });
             }
             break;
+          case 'compaction_start':
+            this.perf(`[compact] summarizing ${event.droppedTurns} turns`);
+            this.postMessage({ type: 'statusDot', state: 'working', label: 'Compacting context...', sessionId: session.id });
+            break;
+          case 'compaction_done': {
+            const saved = Math.max(0, event.beforeTokens - event.afterTokens);
+            this.perf(`[compact] ${event.beforeTokens} -> ${event.afterTokens} tokens (-${saved})`);
+            this.postMessage({
+              type: 'assistantStreamChunk',
+              text: `\n\n*Compacted ${event.droppedTurns} earlier turns to fit the context window (~${saved.toLocaleString()} tokens freed).*\n\n`,
+              sessionId: session.id,
+            });
+            break;
+          }
           case 'error':
             this.postMessage({
               type: 'error',
@@ -413,6 +427,36 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.sessionManager.delete(sessionId);
         this.sessionQueues.delete(sessionId);
         this.sendSessionsList();
+        break;
+      }
+
+      case 'compactSession': {
+        const sessionId = message.sessionId as string;
+        const session = this.sessionManager.get(sessionId);
+        if (!session || !this.agentLoop) return;
+        if (this.runningSessions.has(sessionId)) {
+          this.postMessage({ type: 'error', message: 'Wait for the current run to finish before compacting.', sessionId });
+          return;
+        }
+        this.postMessage({ type: 'statusDot', state: 'working', label: 'Compacting context...', sessionId });
+        const compacted = await this.agentLoop.compact(session.history, (event) => {
+          if (event.type === 'compaction_done') {
+            const saved = Math.max(0, event.beforeTokens - event.afterTokens);
+            this.postMessage({
+              type: 'assistantStreamChunk',
+              text: `\n\n*Compacted ${event.droppedTurns} earlier turns (~${saved.toLocaleString()} tokens freed).*\n\n`,
+              sessionId,
+            });
+          } else if (event.type === 'error') {
+            this.postMessage({ type: 'error', message: event.message, sessionId });
+          }
+        });
+        if (!compacted) {
+          this.postMessage({ type: 'error', message: 'Nothing worth compacting yet.', sessionId });
+        }
+        this.postMessage({ type: 'statusDot', state: 'done', sessionId });
+        this.postMessage({ type: 'done', turnId: Date.now().toString(), sessionId });
+        this.sessionManager.save();
         break;
       }
 

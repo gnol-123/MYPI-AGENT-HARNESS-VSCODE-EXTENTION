@@ -243,6 +243,7 @@ const HELP_COMMANDS: Array<[string, string]> = [
   ['/new', 'Start a new chat session'],
   ['/resume', 'Browse and reopen past sessions'],
   ['/clear', 'Clear the current session'],
+  ['/compact', 'Summarize earlier turns to free context'],
   ['/help', 'Show this help'],
   ['/model', 'Switch the AI model'],
   ['/cd', 'Set working directory for shell commands'],
@@ -652,6 +653,10 @@ export const App: React.FC = () => {
   const setCwd = useCallback((cwd: string) => {
     vscodeApi.postMessage({ type: 'setCwd', cwd });
   }, []);
+
+  const compactSession = useCallback(() => {
+    vscodeApi.postMessage({ type: 'compactSession', sessionId: activeSessionId });
+  }, [activeSessionId]);
 
   const clearSession = useCallback(() => {
     vscodeApi.postMessage({ type: 'clearSession', sessionId: activeSessionId });
@@ -1331,6 +1336,7 @@ export const App: React.FC = () => {
           onNewSession={newSession}
           onShowHistory={() => { setShowHelp(false); setShowHistory(true); }}
           onClearSession={clearSession}
+          onCompact={compactSession}
           onShowHelp={() => { setShowHistory(false); setShowHelp(true); }}
         />
         {agentStatus.provider && (

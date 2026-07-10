@@ -1,4 +1,13 @@
-import { LLMProvider, LLMEvent, ToolDef, ThinkingEffort } from '../providers/types';
+import { LLMProvider, LLMEvent, ToolDef, ThinkingEffort, Message } from '../providers/types';
+import { contextWindowFor } from '../pricing';
+import {
+  planCompaction,
+  buildCompactedHistory,
+  renderForSummary,
+  estimateMessagesTokens,
+  estimateTokens,
+  SUMMARY_PROMPT,
+} from './compaction';
 import { ToolRegistry } from '../tools/registry';
 import { ConversationHistory } from './history';
 import { Skill } from '../skills/loader';
@@ -75,6 +84,71 @@ export class AgentLoop {
     }
   }
 
+  /**
+   * Summarizes `messages` using the model already in use. Runs as its own
+   * one-shot request with no tools, so it cannot recurse or call anything.
+   */
+  private async summarize(messages: Message[], signal: AbortSignal): Promise<string> {
+    const transcript = renderForSummary(messages);
+    let summary = '';
+
+    const stream = this.provider.streamChat(
+      [{ role: 'user', content: `${transcript}\n\n---\n\n${SUMMARY_PROMPT}` }],
+      [],
+      'You summarize engineering transcripts precisely and without embellishment.',
+      2048,
+    );
+
+    for await (const event of stream) {
+      if (signal.aborted) break;
+      if (event.type === 'text') summary += event.text;
+      else if (event.type === 'error') throw new Error(event.message);
+    }
+    return summary.trim();
+  }
+
+  /** Compacts when the next request would exceed the threshold. */
+  private async maybeCompact(
+    history: ConversationHistory,
+    systemPrompt: string,
+    onEvent: (event: LLMEvent) => void,
+    signal: AbortSignal,
+    force = false,
+  ): Promise<boolean> {
+    const messages = history.getMessages();
+    const window = contextWindowFor(this.modelName);
+    const promptTokens = estimateMessagesTokens(messages) + estimateTokens(systemPrompt);
+
+    // Manual /compact bypasses the threshold but still honours the "nothing
+    // worth dropping" guard inside planCompaction.
+    const plan = planCompaction(messages, force ? window : promptTokens, window);
+    if (!plan) return false;
+
+    onEvent({ type: 'compaction_start', droppedTurns: plan.drop.length });
+
+    try {
+      const summary = await this.summarize(plan.drop, signal);
+      if (!summary) return false;
+
+      history.replaceMessages(buildCompactedHistory(plan, summary));
+      const after = estimateMessagesTokens(history.getMessages()) + estimateTokens(systemPrompt);
+      onEvent({ type: 'compaction_done', droppedTurns: plan.drop.length, beforeTokens: promptTokens, afterTokens: after });
+      return true;
+    } catch (err) {
+      // A failed summary must not kill the run — better a big prompt than none.
+      const msg = err instanceof Error ? err.message : String(err);
+      onEvent({ type: 'error', message: `Could not compact context: ${msg}. Continuing without compaction.` });
+      return false;
+    }
+  }
+
+  /** Manual /compact. Returns false when there was nothing worth compacting. */
+  async compact(history: ConversationHistory, onEvent: (event: LLMEvent) => void): Promise<boolean> {
+    const controller = new AbortController();
+    const systemPrompt = buildSystemPrompt(this.skills, undefined, this.thinkingEffort);
+    return this.maybeCompact(history, systemPrompt, onEvent, controller.signal, true);
+  }
+
   async run(
     history: ConversationHistory,
     userMessage: string,
@@ -95,6 +169,10 @@ export class AgentLoop {
       while (iterations < MAX_TOOL_ITERATIONS) {
         if (signal.aborted) break;
         iterations++;
+
+        // Before sending: would this request overflow? Compact if so. Doing it
+        // here means a long autonomous run never dies at the context limit.
+        await this.maybeCompact(history, systemPrompt, onEvent, signal);
 
         const toolCalls: Array<{ id: string; name: string; input: Record<string, unknown>; argsError?: string }> = [];
         let currentText = '';

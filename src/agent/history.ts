@@ -60,6 +60,11 @@ export class ConversationHistory {
     return [...this.pendingToolCalls];
   }
 
+  /** Used by compaction to swap old turns for a summary. */
+  replaceMessages(messages: Message[]): void {
+    this.messages = messages;
+  }
+
   clear(): void {
     this.messages = [];
     this.pendingToolCalls = [];
