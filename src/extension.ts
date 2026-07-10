@@ -14,6 +14,14 @@ import { bashTool, setBashCwd } from './tools/bash';
 import { webFetchTool, setWebConsent } from './tools/web-fetch';
 import { webSearchTool } from './tools/web-search';
 import { WebConsent, ConsentDecision } from './tools/web-consent';
+import {
+  browserNavigateTool,
+  browserSnapshotTool,
+  browserClickTool,
+  browserTypeTool,
+  setBrowserConsent,
+  closeBrowser,
+} from './tools/browser';
 import { context7Tool } from './tools/context7';
 import { todoWriteTool } from './tools/todo';
 import { loadSkills } from './skills/loader';
@@ -75,9 +83,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     toolRegistry.register(context7Tool);
     toolRegistry.register(todoWriteTool);
 
-    // web_fetch is model-driven outbound HTTP: gate it on user consent.
+    toolRegistry.register(browserNavigateTool);
+    toolRegistry.register(browserSnapshotTool);
+    toolRegistry.register(browserClickTool);
+    toolRegistry.register(browserTypeTool);
+
+    // web_fetch and the browser are model-driven outbound HTTP: gate both on
+    // the same per-domain consent, so approving a domain once covers both.
     webConsent = new WebConsent(readWebPolicy(), askWebConsent);
     setWebConsent(webConsent);
+    setBrowserConsent(webConsent);
 
     const config = getConfig();
     setBundledHarnessDir(path.join(context.extensionPath, 'harness'));
@@ -299,8 +314,9 @@ async function createAgentLoop(context: vscode.ExtensionContext, modelOverride?:
   return new AgentLoop(provider, toolRegistry, skills, config.maxTokens, model, preset.name, providerKey, allModels());
 }
 
-export function deactivate(): void {
-  // Cleanup if needed
+export async function deactivate(): Promise<void> {
+  // Otherwise a headless Chromium outlives the extension host.
+  await closeBrowser();
 }
 
 async function selfTest(context: vscode.ExtensionContext): Promise<void> {

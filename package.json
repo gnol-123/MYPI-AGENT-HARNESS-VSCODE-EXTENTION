@@ -2,7 +2,7 @@
   "name": "mypi-by-sl",
   "displayName": "MYPI-by-SL",
   "description": "Full AI coding agent inside VS Code - powered by SL's PI",
-  "version": "0.3.19",
+  "version": "0.3.20",
   "publisher": "sl",
   "repository": {
     "type": "git",
@@ -140,7 +140,12 @@
         "mypi-by-sl.thinkingLevel": {
           "type": "string",
           "default": "high",
-          "enum": ["off", "low", "medium", "high"],
+          "enum": [
+            "off",
+            "low",
+            "medium",
+            "high"
+          ],
           "description": "Model reasoning effort (matches PI's defaultThinkingLevel). 'off' disables extended thinking"
         },
         "mypi-by-sl.skillsPath": {
@@ -155,13 +160,17 @@
         },
         "mypi-by-sl.webAllowedDomains": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Domains web_fetch may access without prompting, e.g. [\"docs.z.ai\", \"*.anthropic.com\"]. Private and internal addresses are always blocked regardless."
         },
         "mypi-by-sl.webBlockedDomains": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Domains web_fetch may never access. Checked before the allow list."
         }
@@ -187,7 +196,8 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.110.0"
+    "@anthropic-ai/sdk": "^0.110.0",
+    "playwright": "^1.61.1"
   },
   "allowScripts": {
     "esbuild@0.19.12": true
