@@ -287,6 +287,148 @@ function relativeTime(ts: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+/** Question card fed by the agent's ask_user tool; blocks the run until answered. */
+const AskUserCard: React.FC<{
+  msg: import('./types').AskUserMsg;
+  onAnswer: (answers: string[], other: boolean) => void;
+  onCancel: () => void;
+}> = ({ msg, onAnswer, onCancel }) => {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [otherText, setOtherText] = useState('');
+  const [otherMode, setOtherMode] = useState(false);
+  const otherRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (otherMode) otherRef.current?.focus();
+  }, [otherMode]);
+
+  const toggle = (label: string) => {
+    if (msg.multiSelect) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(label)) next.delete(label); else next.add(label);
+        return next;
+      });
+      return;
+    }
+    // Single-select answers immediately — one click, no confirm step.
+    onAnswer([label], false);
+  };
+
+  const submitOther = () => {
+    const text = otherText.trim();
+    if (text) onAnswer([text], true);
+  };
+
+  return (
+    <div style={{
+      margin: '0 12px 8px', padding: '10px 12px',
+      background: 'rgba(203,166,247,0.06)',
+      border: '1px solid rgba(203,166,247,0.35)',
+      borderRadius: '10px', fontSize: '12px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+        {msg.header && (
+          <span style={{
+            fontSize: '9px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em',
+            color: '#cba6f7', border: '1px solid rgba(203,166,247,0.4)', borderRadius: '4px', padding: '1px 5px',
+          }}>{msg.header}</span>
+        )}
+        <span style={{ flex: 1, fontWeight: 600, color: 'var(--vscode-foreground)', lineHeight: '1.4' }}>{msg.question}</span>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {msg.options.map((opt) => {
+          const isOn = selected.has(opt.label);
+          return (
+            <button
+              key={opt.label}
+              onClick={() => toggle(opt.label)}
+              style={{
+                textAlign: 'left', padding: '6px 9px', cursor: 'pointer',
+                background: isOn ? 'rgba(203,166,247,0.18)' : 'transparent',
+                border: `1px solid ${isOn ? '#cba6f7' : 'var(--vscode-input-border)'}`,
+                borderRadius: '6px', color: 'var(--vscode-foreground)', fontSize: '12px',
+              }}
+            >
+              <div style={{ fontWeight: 600, display: 'flex', gap: '6px', alignItems: 'baseline' }}>
+                {msg.multiSelect && <span style={{ color: '#cba6f7' }}>{isOn ? '★' : '□'}</span>}
+                <span>{opt.label}</span>
+              </div>
+              {opt.description && (
+                <div style={{ color: 'var(--vscode-descriptionForeground)', fontSize: '11px', marginTop: '1px', lineHeight: '1.45' }}>
+                  {opt.description}
+                </div>
+              )}
+            </button>
+          );
+        })}
+
+        {!otherMode ? (
+          <button
+            onClick={() => setOtherMode(true)}
+            style={{
+              textAlign: 'left', padding: '6px 9px', cursor: 'pointer', background: 'transparent',
+              border: '1px dashed var(--vscode-input-border)', borderRadius: '6px',
+              color: 'var(--vscode-descriptionForeground)', fontSize: '12px',
+            }}
+          >Other — type my own answer</button>
+        ) : (
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <input
+              ref={otherRef}
+              value={otherText}
+              onChange={(e) => setOtherText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); submitOther(); }
+                if (e.key === 'Escape') setOtherMode(false);
+              }}
+              placeholder="Your answer..."
+              style={{
+                flex: 1, padding: '5px 8px', fontSize: '12px', borderRadius: '6px',
+                background: 'var(--vscode-input-background)', color: 'var(--vscode-input-foreground)',
+                border: '1px solid #cba6f7', outline: 'none',
+              }}
+            />
+            <button
+              onClick={submitOther}
+              disabled={!otherText.trim()}
+              style={{
+                padding: '5px 12px', fontSize: '11px', fontWeight: 600, borderRadius: '6px', border: 'none',
+                cursor: otherText.trim() ? 'pointer' : 'default',
+                background: otherText.trim() ? '#cba6f7' : 'var(--vscode-input-border)',
+                color: otherText.trim() ? '#1e1e2e' : 'var(--vscode-descriptionForeground)',
+              }}
+            >Send</button>
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: '8px', marginTop: '8px', alignItems: 'center' }}>
+        {msg.multiSelect && (
+          <button
+            onClick={() => onAnswer(Array.from(selected), false)}
+            disabled={selected.size === 0}
+            style={{
+              padding: '4px 12px', fontSize: '11px', fontWeight: 600, borderRadius: '5px', border: 'none',
+              cursor: selected.size ? 'pointer' : 'default',
+              background: selected.size ? '#cba6f7' : 'var(--vscode-input-border)',
+              color: selected.size ? '#1e1e2e' : 'var(--vscode-descriptionForeground)',
+            }}
+          >Submit {selected.size > 0 && `(${selected.size})`}</button>
+        )}
+        <button
+          onClick={onCancel}
+          style={{
+            background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '11px',
+            color: 'var(--vscode-descriptionForeground)', padding: '4px 2px',
+          }}
+        >Skip</button>
+      </div>
+    </div>
+  );
+};
+
 /** Pinned live task list fed by the agent's todo_write tool. */
 const TodoList: React.FC<{ items: import('./types').TodoItem[] }> = ({ items }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -357,6 +499,21 @@ export const App: React.FC = () => {
   const [thinkingEffort, setThinkingEffort] = useState<'low' | 'medium' | 'high'>('medium');
   const [runningSessions, setRunningSessions] = useState<Set<string>>(new Set());
   const [todosBySession, setTodosBySession] = useState<Map<string, import('./types').TodoItem[]>>(new Map());
+  const [pendingQuestion, setPendingQuestion] = useState<import('./types').AskUserMsg | undefined>();
+
+  const answerQuestion = useCallback((answers: string[], other: boolean) => {
+    setPendingQuestion((q) => {
+      if (q) vscodeApi.postMessage({ type: 'answerQuestion', id: q.id, answers, other });
+      return undefined;
+    });
+  }, []);
+
+  const skipQuestion = useCallback(() => {
+    setPendingQuestion((q) => {
+      if (q) vscodeApi.postMessage({ type: 'answerQuestion', id: q.id, cancelled: true });
+      return undefined;
+    });
+  }, []);
   const [liveToolResultsBySession, setLiveToolResultsBySession] = useState<Map<string, Map<string, { result: string; truncated?: boolean; isError?: boolean }>>>(new Map());
   /** Ordered stream blocks for inline rendering (PI-style) */
   const [streamBlocksBySession, setStreamBlocksBySession] = useState<Map<string, import('./types').StreamBlock[]>>(new Map());
@@ -681,6 +838,15 @@ export const App: React.FC = () => {
           });
           break;
         }
+
+        case 'askUser':
+          setPendingQuestion(msg);
+          break;
+
+        case 'askUserClose':
+          // The run was aborted while the question was open.
+          setPendingQuestion((q) => (q && q.id === msg.id ? undefined : q));
+          break;
 
         case 'todos':
           setTodosBySession((prev) => {
@@ -1089,6 +1255,10 @@ export const App: React.FC = () => {
           onAbort={handleAbort}
           onCancelQueued={handleCancelQueued}
         />
+
+        {pendingQuestion && pendingQuestion.sessionId === activeSessionId && (
+          <AskUserCard msg={pendingQuestion} onAnswer={answerQuestion} onCancel={skipQuestion} />
+        )}
 
         {(todosBySession.get(activeSessionId)?.length ?? 0) > 0 && (
           <TodoList items={todosBySession.get(activeSessionId)!} />

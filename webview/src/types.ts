@@ -144,6 +144,26 @@ export interface TodosMsg {
   items: TodoItem[];
 }
 
+export interface AskOption {
+  label: string;
+  description: string;
+}
+
+export interface AskUserMsg {
+  type: 'askUser';
+  id: string;
+  sessionId: string;
+  question: string;
+  header: string;
+  options: AskOption[];
+  multiSelect: boolean;
+}
+
+export interface AskUserCloseMsg {
+  type: 'askUserClose';
+  id: string;
+}
+
 export type HostToWebview = AssistantStreamChunk | ToolCallStart | ToolCallResult | AgentError | AgentDone | SessionsList | SessionMessages | PrefillPrompt | AgentStatus
   | ThinkingChunk
   | SessionUsageMsg
@@ -153,8 +173,10 @@ export type HostToWebview = AssistantStreamChunk | ToolCallStart | ToolCallResul
   | NetworkReconnectedMsg
   | QueueStatusMsg
   | ThinkingEffortMsg
-  | TodosMsg;
-export type WebviewToHost = UserMessage | { type: 'cancelRequest'; sessionId: string } | { type: 'runCommand'; command: string } | { type: 'switchSession'; sessionId: string } | { type: 'newSession' } | { type: 'deleteSession'; sessionId: string } | { type: 'switchModel'; model: string } | { type: 'setCwd'; cwd: string } | { type: 'clearSession'; sessionId: string } | { type: 'retryPrompt'; sessionId: string; text: string } | { type: 'setThinkingEffort'; effort: 'low' | 'medium' | 'high' } | { type: 'webviewReady' };
+  | TodosMsg
+  | AskUserMsg
+  | AskUserCloseMsg;
+export type WebviewToHost = UserMessage | { type: 'cancelRequest'; sessionId: string } | { type: 'runCommand'; command: string } | { type: 'switchSession'; sessionId: string } | { type: 'newSession' } | { type: 'deleteSession'; sessionId: string } | { type: 'switchModel'; model: string } | { type: 'setCwd'; cwd: string } | { type: 'clearSession'; sessionId: string } | { type: 'retryPrompt'; sessionId: string; text: string } | { type: 'setThinkingEffort'; effort: 'low' | 'medium' | 'high' } | { type: 'webviewReady' } | { type: 'answerQuestion'; id: string; answers?: string[]; other?: boolean; cancelled?: boolean };
 
 export interface Message {
   id: string;

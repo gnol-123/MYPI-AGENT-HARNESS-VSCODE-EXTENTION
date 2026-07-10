@@ -5,6 +5,7 @@ import { setBashCwd } from '../tools/bash';
 import { SessionManager, Session } from './session-manager';
 import { costUsd, contextWindowFor } from '../pricing';
 import { parseTodos } from '../tools/todo';
+import { AskQuestion, AskAnswer, setAskUserBridge } from '../tools/ask-user';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   public static currentProvider: ChatViewProvider | undefined;
@@ -58,6 +59,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   resolveWebviewView(webviewView: vscode.WebviewView): void {
     this.view = webviewView;
     ChatViewProvider.currentProvider = this;
+    // The ask_user tool needs a live webview to render the question into.
+    setAskUserBridge({ ask: (q) => this.askUser(this.sessionManager.activeId, q) });
 
     webviewView.webview.options = {
       enableScripts: true,
@@ -79,6 +82,28 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   private postMessage(message: Record<string, unknown>): void {
     this.view?.webview.postMessage(message);
+  }
+
+  /** Questions awaiting an answer from the webview, keyed by id. */
+  private pendingQuestions = new Map<string, (answer: AskAnswer) => void>();
+  private questionSeq = 0;
+
+  /** Suspends the agent loop until the webview posts back an answer. */
+  private askUser(sessionId: string, question: AskQuestion): Promise<AskAnswer> {
+    const id = `q${++this.questionSeq}`;
+    return new Promise<AskAnswer>((resolve) => {
+      this.pendingQuestions.set(id, resolve);
+      this.postMessage({ type: 'askUser', id, sessionId, ...question });
+    });
+  }
+
+  /** Unblocks every waiting question — abort must never leave the loop hanging. */
+  private cancelPendingQuestions(): void {
+    for (const [id, resolve] of this.pendingQuestions) {
+      resolve({ cancelled: true });
+      this.postMessage({ type: 'askUserClose', id });
+    }
+    this.pendingQuestions.clear();
   }
 
   private perfChannel: vscode.OutputChannel | undefined;
@@ -137,9 +162,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     let writingLabelSent = false;
     let thinkingLabelSent = false;
     let foundFlashSent = false;
-    // todo_write calls render as the checklist, not tool cards; remember their
-    // ids so their tool_results don't try to resolve a card that never existed.
-    const todoCallIds = new Set<string>();
+    // todo_write and ask_user render their own UI, not tool cards. Remember
+    // their ids so their tool_results don't resolve a card that never existed.
+    const uiRenderedCallIds = new Set<string>();
 
     // Stage timing: "it's slow" is only fixable when we can see WHICH stage is
     // slow. Every turn logs first-byte latency to the "MYPI Perf" output channel.
@@ -166,6 +191,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             // green flash on todo_write.
             if (event.name === 'todo_write') {
               this.postMessage({ type: 'statusDot', state: 'working', label: 'Planning tasks...', sessionId: session.id });
+              break;
+            }
+            if (event.name === 'ask_user') {
+              this.postMessage({ type: 'statusDot', state: 'working', label: 'Waiting for you...', sessionId: session.id });
               break;
             }
             // First tool of the run keeps the "Found solution!" green flash the
@@ -227,12 +256,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           case 'tool_use':
             // todo_write renders as the pinned checklist, not a tool card.
             if (event.name === 'todo_write') {
-              todoCallIds.add(event.id);
+              uiRenderedCallIds.add(event.id);
               const items = parseTodos(event.input);
               if (items) {
                 this.postMessage({ type: 'todos', items, sessionId: session.id });
                 this.postMessage({ type: 'statusDot', state: 'working', label: 'Updating tasks...', sessionId: session.id });
               }
+              break;
+            }
+            // ask_user renders as the question card the tool itself posts.
+            if (event.name === 'ask_user') {
+              uiRenderedCallIds.add(event.id);
+              this.postMessage({ type: 'statusDot', state: 'working', label: 'Waiting for you...', sessionId: session.id });
               break;
             }
             this.postMessage({
@@ -249,7 +284,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             // result, so this is the reference point for its first-byte time.
             turnStart = Date.now();
             // todo_write has no tool card to resolve.
-            if (todoCallIds.has(event.id)) break;
+            if (uiRenderedCallIds.has(event.id)) break;
             this.postMessage({
               type: 'toolCallResult',
               id: event.id,
@@ -383,6 +418,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
       case 'clearSession': {
         const sessionId = message.sessionId as string;
+        this.cancelPendingQuestions();
         this.sessionManager.clear(sessionId);
         this.sessionQueues.delete(sessionId);
         this.postMessage({ type: 'todos', items: [], sessionId });
@@ -405,8 +441,24 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
       }
 
+      case 'answerQuestion': {
+        const resolve = this.pendingQuestions.get(message.id as string);
+        // A stale answer for a superseded question has no entry — drop it.
+        if (resolve) {
+          this.pendingQuestions.delete(message.id as string);
+          resolve({
+            answers: message.answers as string[],
+            other: message.other as boolean,
+            cancelled: message.cancelled as boolean,
+          });
+        }
+        break;
+      }
+
       case 'cancelRequest': {
         const sessionId = message.sessionId as string;
+        // A question awaiting an answer would otherwise block the loop forever.
+        this.cancelPendingQuestions();
         // Abort the running agent loop
         if (this.agentLoop) {
           this.agentLoop.abort();

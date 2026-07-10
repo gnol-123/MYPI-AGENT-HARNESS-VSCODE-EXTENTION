@@ -24,6 +24,7 @@ import {
 } from './tools/browser';
 import { context7Tool } from './tools/context7';
 import { todoWriteTool } from './tools/todo';
+import { askUserTool } from './tools/ask-user';
 import { loadSkills } from './skills/loader';
 import { piAgentDir, resetHarnessCache, setBundledHarnessDir, setWorkspaceRoot } from './agent/system-prompt';
 import * as fs from 'fs';
@@ -82,6 +83,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     toolRegistry.register(webSearchTool);
     toolRegistry.register(context7Tool);
     toolRegistry.register(todoWriteTool);
+    toolRegistry.register(askUserTool);
 
     toolRegistry.register(browserNavigateTool);
     toolRegistry.register(browserSnapshotTool);
