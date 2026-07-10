@@ -19,13 +19,7 @@ export function getConfig(): SLSConfig {
   return buildConfig(getVsCodeSettings());
 }
 
-export async function getApiKey(secrets: vscode.SecretStorage): Promise<string | undefined> {
-  return secrets.get('mypi-by-sl.apiKey');
-}
-
-export async function setApiKey(secrets: vscode.SecretStorage, key: string): Promise<void> {
-  await secrets.store('mypi-by-sl.apiKey', key);
-}
+// API keys live in ./api-keys.ts — one secret slot per provider.
 
 export { SLSConfig, buildConfig, PROVIDER_PRESETS };
 export type { Provider };

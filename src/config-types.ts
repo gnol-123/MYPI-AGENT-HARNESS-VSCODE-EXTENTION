@@ -81,6 +81,23 @@ export const PROVIDER_PRESETS: Record<Provider, ProviderPreset> = {
   },
 };
 
+/** Which provider serves this model, per the preset catalog. */
+export function providerForModel(model: string): Provider | undefined {
+  for (const [key, preset] of Object.entries(PROVIDER_PRESETS) as Array<[Provider, ProviderPreset]>) {
+    if (preset.models.includes(model) || preset.defaultModel === model) return key;
+  }
+  return undefined;
+}
+
+/** Every model from every provider — the cross-provider picker list. */
+export function allModels(): string[] {
+  const seen = new Set<string>();
+  for (const preset of Object.values(PROVIDER_PRESETS)) {
+    for (const m of preset.models) seen.add(m);
+  }
+  return Array.from(seen);
+}
+
 const DEFAULT_CONFIG: SLSConfig = {
   provider: 'anthropic',
   model: '',

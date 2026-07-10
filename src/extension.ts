@@ -2,7 +2,10 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { ChatViewProvider } from './chat/panel';
 import { AgentLoop } from './agent/loop';
-import { getConfig, getApiKey, setApiKey, PROVIDER_PRESETS } from './config';
+import { getConfig, PROVIDER_PRESETS } from './config';
+import { providerForModel, allModels } from './config-types';
+import type { Provider } from './config-types';
+import { getApiKey, setApiKey } from './api-keys';
 import { ToolRegistry } from './tools/registry';
 import { readTool } from './tools/read';
 import { writeTool } from './tools/write';
@@ -66,6 +69,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         // no-op against a discarded loop. setAgentLoop re-applies the effort.
         currentAgentLoop = loop;
         chatProvider.setAgentLoop(loop);
+        // Persist so a reload comes back on the same model, and keep the
+        // provider setting consistent with where the model actually routes.
+        const settings = vscode.workspace.getConfiguration('mypi-by-sl');
+        await settings.update('model', newModel, vscode.ConfigurationTarget.Global);
+        const routed = providerForModel(newModel);
+        if (routed) {
+          await settings.update('provider', routed, vscode.ConfigurationTarget.Global);
+        }
       }
     };
 
@@ -160,9 +171,22 @@ async function contextAction(
   }
 }
 
-async function promptSetApiKey(context: vscode.ExtensionContext): Promise<void> {
+async function promptSetApiKey(context: vscode.ExtensionContext, providerKey?: Provider): Promise<void> {
   const config = getConfig();
-  const preset = PROVIDER_PRESETS[config.provider];
+  let target = providerKey;
+  if (!target) {
+    const picked = await vscode.window.showQuickPick(
+      (Object.entries(PROVIDER_PRESETS) as Array<[Provider, (typeof PROVIDER_PRESETS)[Provider]]>).map(([key, p]) => ({
+        label: p.name,
+        description: key === config.provider ? 'current default' : undefined,
+        key,
+      })),
+      { placeHolder: 'Which provider is this API key for?' },
+    );
+    if (!picked) return;
+    target = picked.key;
+  }
+  const preset = PROVIDER_PRESETS[target];
   const label = `${preset.name} API Key`;
 
   const key = await vscode.window.showInputBox({
@@ -172,7 +196,7 @@ async function promptSetApiKey(context: vscode.ExtensionContext): Promise<void> 
   });
 
   if (key) {
-    await setApiKey(context.secrets, key);
+    await setApiKey(context.secrets, target, key);
     vscode.window.showInformationMessage(`${label} saved successfully.`);
     currentAgentLoop = undefined;
     await ensureAgentLoop(context);
@@ -182,33 +206,41 @@ async function promptSetApiKey(context: vscode.ExtensionContext): Promise<void> 
 async function createAgentLoop(context: vscode.ExtensionContext, modelOverride?: string): Promise<AgentLoop | undefined> {
   const config = getConfig();
 
-  const apiKey = await getApiKey(context.secrets);
+  // The model decides the provider — picking "glm-4.6" routes to z.ai, picking
+  // "claude-sonnet-5" routes to Anthropic. The provider setting is only the
+  // fallback for models not in the catalog.
+  const requestedModel = modelOverride || config.model;
+  const providerKey: Provider = (requestedModel && providerForModel(requestedModel)) || config.provider;
+  const preset = PROVIDER_PRESETS[providerKey];
+  const model = requestedModel || preset.defaultModel;
+
+  // Each provider has its own key slot; the pre-feature single key belonged to
+  // the provider configured in settings.
+  const apiKey = await getApiKey(context.secrets, providerKey, config.provider);
   if (!apiKey) {
     const result = await vscode.window.showErrorMessage(
-      "No API key configured. Set one to use MYPI-by-SL.",
+      `No API key configured for ${preset.name}. Set one to use ${model}.`,
       'Set API Key',
     );
     if (result === 'Set API Key') {
-      await promptSetApiKey(context);
-      return createAgentLoop(context);
+      await promptSetApiKey(context, providerKey);
+      return createAgentLoop(context, modelOverride);
     }
     return undefined;
   }
 
   let provider: LLMProvider;
-  const preset = PROVIDER_PRESETS[config.provider];
+  // A custom endpoint override only applies to the provider it was set for.
+  const endpoint = (providerKey === config.provider && config.apiEndpoint) || preset.defaultEndpoint;
 
-  const model = modelOverride || config.model || preset.defaultModel;
-  const endpoint = config.apiEndpoint || preset.defaultEndpoint;
-
-  if (config.provider === 'anthropic') {
+  if (providerKey === 'anthropic') {
     provider = createAnthropicProvider({ apiKey, model, thinkingLevel: config.thinkingLevel });
   } else {
     provider = createOpenAICompatProvider({
       apiKey,
       model,
       baseUrl: endpoint,
-      providerKey: config.provider,
+      providerKey,
       thinkingLevel: config.thinkingLevel,
     });
   }
@@ -216,7 +248,8 @@ async function createAgentLoop(context: vscode.ExtensionContext, modelOverride?:
   resetHarnessCache(); // pick up edits to ~/.pi/agent/SYSTEM.md / AGENTS.md
   const skills = await loadSkills(skillsPath);
 
-  return new AgentLoop(provider, toolRegistry, skills, config.maxTokens, model, preset.name, config.provider, preset.models);
+  // The picker lists every model from every provider; switching routes automatically.
+  return new AgentLoop(provider, toolRegistry, skills, config.maxTokens, model, preset.name, providerKey, allModels());
 }
 
 export function deactivate(): void {
@@ -224,9 +257,9 @@ export function deactivate(): void {
 }
 
 async function selfTest(context: vscode.ExtensionContext): Promise<void> {
-  const apiKey = await getApiKey(context.secrets);
+  const apiKey = await getApiKey(context.secrets, 'z-ai', getConfig().provider);
   if (!apiKey) {
-    vscode.window.showErrorMessage('Self-test: No API key configured.');
+    vscode.window.showErrorMessage('Self-test: No Z.AI API key configured (the self-test targets glm-4.6).');
     return;
   }
 
