@@ -41,7 +41,13 @@ const MODELS: ModelPricing[] = [
   { prefix: 'claude-sonnet-4', input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3, contextWindow: 200 * K },
   { prefix: 'claude-haiku-4-5', input: 1.0, output: 5.0, cacheWrite: 1.25, cacheRead: 0.1, contextWindow: 200 * K },
 
-  // Z.AI
+  // Z.AI — GLM 5.x rates from docs.z.ai (July 2026); cached input $0.26/$0.24/$0.2.
+  // 1M window sourced for 5.2/5.1; glm-5 and glm-5-turbo windows unverified,
+  // kept at a conservative 200K so the context meter over-warns, not under.
+  { prefix: 'glm-5.2', input: 1.4, output: 4.4, cacheRead: 0.26, contextWindow: 1_000 * K },
+  { prefix: 'glm-5.1', input: 1.4, output: 4.4, cacheRead: 0.26, contextWindow: 1_000 * K },
+  { prefix: 'glm-5-turbo', input: 1.2, output: 4.0, cacheRead: 0.24, contextWindow: 200 * K },
+  { prefix: 'glm-5', input: 1.0, output: 3.2, cacheRead: 0.2, contextWindow: 200 * K },
   { prefix: 'glm-4.7', input: 0.4, output: 1.75, contextWindow: 200 * K },
   { prefix: 'glm-4.6', input: 0.43, output: 1.74, contextWindow: 200 * K },
   { prefix: 'glm-4.5-flash', input: 0.0, output: 0.0, contextWindow: 128 * K },
