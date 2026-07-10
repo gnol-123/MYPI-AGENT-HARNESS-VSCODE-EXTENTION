@@ -2,7 +2,7 @@
   "name": "mypi-by-sl",
   "displayName": "MYPI-by-SL",
   "description": "Full AI coding agent inside VS Code - powered by SL's PI",
-  "version": "0.3.18",
+  "version": "0.3.19",
   "publisher": "sl",
   "repository": {
     "type": "git",
@@ -147,6 +147,23 @@
           "type": "string",
           "default": "",
           "description": "Override skill directory (empty = use bundled)"
+        },
+        "mypi-by-sl.braveSearchApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Brave Search API key for the web_search tool (free 2k queries/month at brave.com/search/api). Falls back to BRAVE_SEARCH_API_KEY env var or ~/.pi/agent/brave-key.txt"
+        },
+        "mypi-by-sl.webAllowedDomains": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Domains web_fetch may access without prompting, e.g. [\"docs.z.ai\", \"*.anthropic.com\"]. Private and internal addresses are always blocked regardless."
+        },
+        "mypi-by-sl.webBlockedDomains": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Domains web_fetch may never access. Checked before the allow list."
         }
       }
     }

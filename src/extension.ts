@@ -11,7 +11,9 @@ import { readTool } from './tools/read';
 import { writeTool } from './tools/write';
 import { editTool } from './tools/edit';
 import { bashTool, setBashCwd } from './tools/bash';
-import { webFetchTool } from './tools/web-fetch';
+import { webFetchTool, setWebConsent } from './tools/web-fetch';
+import { webSearchTool } from './tools/web-search';
+import { WebConsent, ConsentDecision } from './tools/web-consent';
 import { context7Tool } from './tools/context7';
 import { todoWriteTool } from './tools/todo';
 import { loadSkills } from './skills/loader';
@@ -25,6 +27,33 @@ let toolRegistry: ToolRegistry;
 let skillsPath: string;
 let chatProvider: ChatViewProvider;
 let currentAgentLoop: AgentLoop | undefined;
+let webConsent: WebConsent | undefined;
+
+/** Cloud metadata is blocked in web-guard regardless; these are user policy. */
+function readWebPolicy(): { allowed: string[]; blocked: string[] } {
+  const cfg = vscode.workspace.getConfiguration('mypi-by-sl');
+  return {
+    allowed: cfg.get<string[]>('webAllowedDomains', []),
+    blocked: cfg.get<string[]>('webBlockedDomains', []),
+  };
+}
+
+/** Modal so the agent cannot slip a fetch past an unattended user. */
+async function askWebConsent(host: string, url: string): Promise<ConsentDecision> {
+  const short = url.length > 90 ? url.slice(0, 87) + '...' : url;
+  const choice = await vscode.window.showWarningMessage(
+    `MYPI wants to fetch from ${host}`,
+    {
+      modal: true,
+      detail: `${short}\n\nContent from the web is untrusted and could try to make the agent leak data. Only allow domains you trust.`,
+    },
+    'Allow once',
+    `Allow ${host} this session`,
+  );
+  if (choice === 'Allow once') return 'once';
+  if (choice) return 'domain';
+  return 'deny';
+}
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   try {
@@ -42,8 +71,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     toolRegistry.register(editTool);
     toolRegistry.register(bashTool);
     toolRegistry.register(webFetchTool);
+    toolRegistry.register(webSearchTool);
     toolRegistry.register(context7Tool);
     toolRegistry.register(todoWriteTool);
+
+    // web_fetch is model-driven outbound HTTP: gate it on user consent.
+    webConsent = new WebConsent(readWebPolicy(), askWebConsent);
+    setWebConsent(webConsent);
 
     const config = getConfig();
     setBundledHarnessDir(path.join(context.extensionPath, 'harness'));
@@ -52,6 +86,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const c7Key = vscode.workspace.getConfiguration('mypi-by-sl').get<string>('context7ApiKey', '');
     if (c7Key.trim()) {
       process.env.CONTEXT7_API_KEY = c7Key.trim();
+    }
+    const braveKey = vscode.workspace.getConfiguration('mypi-by-sl').get<string>('braveSearchApiKey', '');
+    if (braveKey.trim()) {
+      process.env.BRAVE_SEARCH_API_KEY = braveKey.trim();
     }
 
     // Parity with local PI: prefer the live skill library in ~/.pi/agent/skills,
@@ -99,6 +137,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       vscode.commands.registerCommand('mypi-by-sl.selfTest', () =>
         selfTest(context),
       ),
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('mypi-by-sl.webAllowedDomains') || e.affectsConfiguration('mypi-by-sl.webBlockedDomains')) {
+          webConsent?.updatePolicy(readWebPolicy());
+        }
+        if (e.affectsConfiguration('mypi-by-sl.braveSearchApiKey')) {
+          const k = vscode.workspace.getConfiguration('mypi-by-sl').get<string>('braveSearchApiKey', '');
+          if (k.trim()) process.env.BRAVE_SEARCH_API_KEY = k.trim();
+        }
+      }),
     );
 
     vscode.window.showInformationMessage('MYPI-by-SL activated! Click the cat icon or run "MYPI-by-SL: Open Chat".');
